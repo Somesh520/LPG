@@ -2,26 +2,90 @@
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'; // <-- NEW IMPORT
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 
+// Icon library (install kar lena: npm install react-native-vector-icons)
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons'; 
+
 // Sabhi screens import karo
 import HomeScreen from './screens/HomeScreen';
 import InfoScreen from './screens/InfoScreen';
 import LoginScreen from './screens/LoginScreen';
-import SignUpScreen from './screens/Signup'; // Path check kar lena
+import SignUpScreen from './screens/Signup'; 
 import AddDeviceScreen from './screens/AddDeviceScreen';
+// --- NAYE TAB SCREENS ---
+import WeightGraphScreen from './screens/WeightGraphScreen'; // Usage/Graph
+import BookingScreen from './screens/BookingScreen';         // Booking
+import SettingsScreen from './screens/SettingsScreen';       // Settings
 
 const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator(); // <-- Tab Navigator Instanc
 
-// --- Logged-Out users ke liye Screens ---
+// --- 1. BOTTOM TAB NAVIGATOR (LOGGED-IN Screens) --
+function BottomTabs() {
+  return (
+    <Tab.Navigator
+      initialRouteName="Home"
+      screenOptions={{
+        headerShown: false, // Tabs ke upar koi header nahi chahiye
+        tabBarActiveTintColor: '#007AFF', // Blue color
+        tabBarStyle: { height: 60, paddingBottom: 5 },
+      }}
+    >
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          tabBarLabel: 'Home',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="home" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Analytics"
+        component={WeightGraphScreen}
+        options={{
+          tabBarLabel: 'Usage',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="chart-bar" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Booking"
+        component={BookingScreen}
+        options={{
+          tabBarLabel: 'Book',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="gas-cylinder" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          tabBarLabel: 'Settings',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="cog" color={color} size={size} />
+          ),
+        }}
+      />
+    </Tab.Navigator>
+  );
+}
+
+
+// --- 2. LOGGED-OUT USERS KE LIYE Screens ---
 function AuthStack({ hasViewedInfo }: { hasViewedInfo: boolean }) {
   return (
     <Stack.Navigator 
-      // Agar info dekh liya hai toh Login se, warna Info se shuru karo
       initialRouteName={hasViewedInfo ? 'Login' : 'Info'}
     >
       <Stack.Screen name="Info" component={InfoScreen} options={{ headerShown: false }} />
@@ -31,63 +95,58 @@ function AuthStack({ hasViewedInfo }: { hasViewedInfo: boolean }) {
   );
 }
 
-// --- Logged-In users ke liye Screens ---
+// --- 3. LOGGED-IN USERS KE LIYE Screens (Jo Tabs ko load karega) ---
 function MainStack({ hasDevice }: { hasDevice: boolean }) {
   return (
     <Stack.Navigator
-      // Agar device nahi hai toh AddDevice se, warna Home se shuru karo
-      initialRouteName={hasDevice ? 'Home' : 'AddDevice'}
+      // Agar device nahi hai toh AddDevice se shuru karo
+      initialRouteName={hasDevice ? 'AppTabs' : 'AddDevice'} 
     >
       <Stack.Screen name="AddDevice" component={AddDeviceScreen} options={{ title: 'Add Your Device' }} />
-      <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'Dashboard' }} />
-      {/* Aap yahaan aur screens (jaise Profile, Settings) add kar sakte hain */}
+      {/* Tab Navigator ko load karna */}
+      <Stack.Screen name="AppTabs" component={BottomTabs} options={{ headerShown: false }} /> 
     </Stack.Navigator>
   );
 }
 
-// --- Main App Component ---
+// --- 4. Main App Component ---
 function App() {
   const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState(null); // User ki login state
-  const [hasViewedInfo, setHasViewedInfo] = useState(false); // Info screen dekhi ya nahi
-  const [hasDevice, setHasDevice] = useState(false); // Device hai ya nahi
+  const [user, setUser] = useState(null); 
+  const [hasViewedInfo, setHasViewedInfo] = useState(false); 
+  const [hasDevice, setHasDevice] = useState(false); 
 
   useEffect(() => {
-    // Firebase ka listener
     const subscriber = auth().onAuthStateChanged(async (userState) => {
-      setUser(userState); // User ki state set karo (ya null)
+      setUser(userState);
 
       try {
         if (userState) {
-          // --- User Logged In Hai ---
-          // Check karo device hai ya nahi
+          // --- User Logged In Hai: Check Device ---
           const deviceQuery = await firestore()
             .collection('devices')
             .where('ownerId', '==', userState.uid)
             .limit(1)
             .get();
           
-          setHasDevice(!deviceQuery.empty); // Device state set karo
+          setHasDevice(!deviceQuery.empty); 
         
         } else {
-          // --- User Logged Out Hai ---
-          // Check karo Info screen dekhi hai ya nahi
+          // --- User Logged Out Hai: Check Onboarding ---
           const viewed = await AsyncStorage.getItem('hasViewedInfo');
-          setHasViewedInfo(!!viewed); // true/false set karo
+          setHasViewedInfo(!!viewed); 
         }
       } catch (e) {
         console.log("Error during auth state check:", e);
       } finally {
-        // Sab kuch check ho gaya, loading band karo
         setIsLoading(false);
       }
     });
 
-    return subscriber; // Cleanup
-  }, []); // Yeh effect sirf ek baar app load par chalega
+    return subscriber; 
+  }, []);
 
   if (isLoading) {
-    // Jab tak sab check ho raha hai, loading dikhao
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -97,10 +156,7 @@ function App() {
 
   return (
     <NavigationContainer>
-      {/* Yahaan hai Asli Logic:
-        Agar 'user' object hai (logged in), toh 'MainStack' dikhao.
-        Agar 'user' null hai (logged out), toh 'AuthStack' dikhao.
-      */}
+      {/* Conditional Rendering: User logged in hai toh MainStack (Tabs) dikhao, warna AuthStack */}
       {user ? <MainStack hasDevice={hasDevice} /> : <AuthStack hasViewedInfo={hasViewedInfo} />}
     </NavigationContainer>
   );
