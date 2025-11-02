@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "328780906303",
+    "firebase_url": "https://lpgguard-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "lpgguard",
+    "storage_bucket": "lpgguard.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:328780906303:android:181ca2abff0bbf0740dd8a",
+        "android_client_info": {
+          "package_name": "com.lpgparent"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "328780906303-5nt77upctg9i7m11tgqv09o59fn1brdc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lpgparent",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "328780906303-pa0qqqkh1b9b3bnnaj2h7tg88u8overg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQ-z3ewIule2Hk56Cs5rDm81XPgM2rUJE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "328780906303-pa0qqqkh1b9b3bnnaj2h7tg88u8overg.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

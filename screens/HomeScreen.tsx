@@ -1,16 +1,14 @@
+// screens/HomeScreen.tsx
 import React from 'react';
-import { View, Text, Button, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 
-// 'navigation: any' likh rahe hain simplicity ke liye
-export default function HomeScreen({ navigation }: { navigation: any }) {
+export default function HomeScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Home Screen</Text>
-      
-      <Button
-        title="going to Info Page"
-        onPress={() => navigation.navigate('Info')} // 'Info' naam se InfoScreen ko call karega
-      />
+      <Text style={styles.title}>Welcome Home!</Text>
+      <Text style={styles.infoText}>
+        Yahaan aapka live gas level aur weight dikhega.
+      </Text>
     </View>
   );
 }
@@ -27,5 +25,8 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
+  },
+  infoText: {
+    fontSize: 16,
   }
 });
