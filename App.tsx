@@ -2,39 +2,50 @@
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'; // <-- NEW IMPORT
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Text, StatusBar } from 'react-native';
 
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import messaging from '@react-native-firebase/messaging';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import LinearGradient from 'react-native-linear-gradient';
 
-// Icon library (install kar lena: npm install react-native-vector-icons)
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons'; 
-
-// Sabhi screens import karo
+// Screens
 import HomeScreen from './screens/HomeScreen';
 import InfoScreen from './screens/InfoScreen';
 import LoginScreen from './screens/LoginScreen';
-import SignUpScreen from './screens/Signup'; 
+import SignUpScreen from './screens/Signup'; // Using your file name 'Signup'
 import AddDeviceScreen from './screens/AddDeviceScreen';
-// --- NAYE TAB SCREENS ---
-import WeightGraphScreen from './screens/WeightGraphScreen'; // Usage/Graph
-import BookingScreen from './screens/BookingScreen';         // Booking
-import SettingsScreen from './screens/SettingsScreen';       // Settings
+import WeightGraphScreen from './screens/WeightGraphScreen';
+import BookingScreen from './screens/BookingScreen';
+import SettingsScreen from './screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator();
-const Tab = createBottomTabNavigator(); // <-- Tab Navigator Instanc
+const Tab = createBottomTabNavigator();
 
-// --- 1. BOTTOM TAB NAVIGATOR (LOGGED-IN Screens) --
+// ===================
+// 1️⃣ Bottom Tab Navigation
+// ===================
 function BottomTabs() {
   return (
     <Tab.Navigator
       initialRouteName="Home"
       screenOptions={{
-        headerShown: false, // Tabs ke upar koi header nahi chahiye
-        tabBarActiveTintColor: '#007AFF', // Blue color
-        tabBarStyle: { height: 60, paddingBottom: 5 },
+        headerShown: false,
+        tabBarActiveTintColor: '#FFFFFF',
+        tabBarInactiveTintColor: '#88a1b9',
+        tabBarStyle: {
+          backgroundColor: '#000428',
+          borderTopWidth: 0,
+          height: 60,
+          paddingBottom: 5,
+          paddingTop: 5,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+        },
       }}
     >
       <Tab.Screen
@@ -43,7 +54,7 @@ function BottomTabs() {
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="home" color={color} size={size} />
+            <MaterialCommunityIcons name="home-variant" color={color} size={size} />
           ),
         }}
       />
@@ -77,17 +88,27 @@ function BottomTabs() {
           ),
         }}
       />
+
+      {/* 🔧 Hidden AddDevice screen */}
+      <Tab.Screen
+        name="AddDevice"
+        component={AddDeviceScreen}
+        options={{
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+          headerShown: false,
+        }}
+      />
     </Tab.Navigator>
   );
 }
 
-
-// --- 2. LOGGED-OUT USERS KE LIYE Screens ---
+// ===================
+// 2️⃣ Auth Stack (Login / Onboarding)
+// ===================
 function AuthStack({ hasViewedInfo }: { hasViewedInfo: boolean }) {
   return (
-    <Stack.Navigator 
-      initialRouteName={hasViewedInfo ? 'Login' : 'Info'}
-    >
+    <Stack.Navigator initialRouteName={hasViewedInfo ? 'Login' : 'Info'}>
       <Stack.Screen name="Info" component={InfoScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
       <Stack.Screen name="SignUp" component={SignUpScreen} options={{ headerShown: false }} />
@@ -95,79 +116,104 @@ function AuthStack({ hasViewedInfo }: { hasViewedInfo: boolean }) {
   );
 }
 
-// --- 3. LOGGED-IN USERS KE LIYE Screens (Jo Tabs ko load karega) ---
-function MainStack({ hasDevice }: { hasDevice: boolean }) {
-  return (
-    <Stack.Navigator
-      // Agar device nahi hai toh AddDevice se shuru karo
-      initialRouteName={hasDevice ? 'AppTabs' : 'AddDevice'} 
-    >
-      <Stack.Screen name="AddDevice" component={AddDeviceScreen} options={{ title: 'Add Your Device' }} />
-      {/* Tab Navigator ko load karna */}
-      <Stack.Screen name="AppTabs" component={BottomTabs} options={{ headerShown: false }} /> 
-    </Stack.Navigator>
-  );
+// ===================
+// 4️⃣ Notification Helper Function
+// ===================
+async function requestUserPermissionAndSaveToken(userId: string) {
+  try {
+    const authStatus = await messaging().requestPermission();
+    const enabled =
+      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+    if (enabled) {
+      console.log('🔔 Notification permission granted.');
+      const fcmToken = await messaging().getToken();
+
+      if (fcmToken) {
+        console.log('User FCM Token:', fcmToken);
+        await firestore().collection('users').doc(userId).set({
+          fcmToken: fcmToken,
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        console.log('✅ FCM Token saved to Firestore.');
+      }
+    } else {
+      console.warn('Notification permission denied.');
+    }
+  } catch (error) {
+    console.error("❌ Error in requestUserPermissionAndSaveToken: ", error);
+  }
 }
 
-// --- 4. Main App Component ---
+// ===================
+// 5️⃣ Main App Component
+// ===================
 function App() {
   const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState(null); 
-  const [hasViewedInfo, setHasViewedInfo] = useState(false); 
-  const [hasDevice, setHasDevice] = useState(false); 
+  const [user, setUser] = useState<any>(null);
+  const [hasViewedInfo, setHasViewedInfo] = useState(false);
 
   useEffect(() => {
-    const subscriber = auth().onAuthStateChanged(async (userState) => {
+    console.log('🟡 App started → Checking login state...');
+
+    const authSubscriber = auth().onAuthStateChanged(async (userState) => {
+      console.log('👤 Firebase Auth Changed:', userState ? 'LOGGED IN ✅' : 'LOGGED OUT ❌');
       setUser(userState);
 
       try {
         if (userState) {
-          // --- User Logged In Hai: Check Device ---
-          const deviceQuery = await firestore()
-            .collection('devices')
-            .where('ownerId', '==', userState.uid)
-            .limit(1)
-            .get();
-          
-          setHasDevice(!deviceQuery.empty); 
-        
+          // User is logged in
+          requestUserPermissionAndSaveToken(userState.uid).catch(err => console.log(err));
         } else {
-          // --- User Logged Out Hai: Check Onboarding ---
+          // User is logged out
           const viewed = await AsyncStorage.getItem('hasViewedInfo');
-          setHasViewedInfo(!!viewed); 
+          setHasViewedInfo(!!viewed);
+          console.log('📘 Onboarding Viewed?', !!viewed);
         }
-      } catch (e) {
-        console.log("Error during auth state check:", e);
+      } catch (err) {
+        console.log('❌ Error checking auth/onboarding:', err);
       } finally {
         setIsLoading(false);
       }
     });
 
-    return subscriber; 
+    return authSubscriber; // Cleanup
   }, []);
 
+  // 🌀 Loading UI
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
+      <LinearGradient colors={['#000428', '#004e92']} style={styles.loadingContainer}>
+        <StatusBar barStyle="light-content" />
+        <ActivityIndicator size="large" color="#FFFFFF" />
+        <Text style={styles.loadingText}>Loading your Smart Guardian...</Text>
+      </LinearGradient>
     );
   }
 
+  // 🧭 Main Navigation
   return (
     <NavigationContainer>
-      {/* Conditional Rendering: User logged in hai toh MainStack (Tabs) dikhao, warna AuthStack */}
-      {user ? <MainStack hasDevice={hasDevice} /> : <AuthStack hasViewedInfo={hasViewedInfo} />}
+      <StatusBar barStyle="dark-content" />
+      {user ? <BottomTabs /> : <AuthStack hasViewedInfo={hasViewedInfo} />}
     </NavigationContainer>
   );
 }
 
+// ===================
+// Styles
+// ===================
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff'
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: '#ccc',
   }
 });
 

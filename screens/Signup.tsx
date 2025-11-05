@@ -1,8 +1,20 @@
 // screens/SignUpScreen.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Alert } from 'react-native';
-import * as Animatable from 'react-native-animatable';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  SafeAreaView, 
+  TouchableOpacity, 
+  TextInput, 
+  Alert,
+  StatusBar // Add this
+} from 'react-native';
 import auth from '@react-native-firebase/auth';
+
+// --- NAYE IMPORTS ---
+import LinearGradient from 'react-native-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; 
 
 export default function SignUpScreen({ navigation }: { navigation: any }) {
   
@@ -10,7 +22,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // --- Sign Up Function ---
+  // --- Sign Up Function (Logic same) ---
   const handleSignUp = async () => {
     if (email.length === 0 || password.length === 0) {
       Alert.alert('Error', 'Please enter email and password.');
@@ -24,8 +36,6 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
     try {
       await auth().createUserWithEmailAndPassword(email, password);
       Alert.alert('Success', 'Account created successfully! Logging in...');
-      // --- FIX: Yahaan se navigation.replace('Home') HATA DIYA HAI ---
-      // App.tsx ab navigation sambhaalega
     } catch (error: any) { 
       console.log(error);
       if (error.code === 'auth/email-already-in-use') {
@@ -40,119 +50,161 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
     }
   };
 
-  // --- UI (Same) ---
+  // --- NAYA CREATIVE UI ---
   return (
-    <SafeAreaView style={styles.container}>
-      <Animatable.Text animation="fadeInDown" style={styles.title}>
-        Create Account
-      </Animatable.Text>
-      
-      <Animatable.View animation="fadeInUp" delay={300} style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#888"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-        />
-      </Animatable.View>
-      <Animatable.View animation="fadeInUp" delay={500} style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#888"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-      </Animatable.View>
-      <Animatable.View animation="fadeInUp" delay={700} style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Confirm Password"
-          placeholderTextColor="#888"
-          secureTextEntry
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-        />
-      </Animatable.View>
+    <SafeAreaView style={styles.safeArea}>
+      <LinearGradient 
+        colors={['#000428', '#004e92']} 
+        style={styles.container}
+      >
+        <StatusBar barStyle="light-content" />
 
-      <Animatable.View animation="fadeIn" delay={900} style={styles.buttonContainer}>
+        {/* 🔹 Back Button (Naya Add Kiya Hai) */}
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()} 
+          style={styles.backButton}
+        >
+          <Icon name="arrow-left" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
+        
+        {/* 🔹 Icon */}
+        <Icon name="account-plus-outline" size={70} color="#FFFFFF" style={styles.logo} />
+
+        <Text style={styles.title}>Create Account</Text>
+        <Text style={styles.subtitle}>Get started with your new account</Text>
+        
+        <View style={styles.inputContainer}>
+          <Icon name="email-outline" size={20} color="#ccc" style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor="#ccc"
+            keyboardType="email-address"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+          />
+        </View>
+        
+        <View style={styles.inputContainer}>
+          <Icon name="lock-outline" size={20} color="#ccc" style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor="#ccc"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Icon name="lock-check-outline" size={20} color="#ccc" style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Confirm Password"
+            placeholderTextColor="#ccc"
+            secureTextEntry
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+          />
+        </View>
+
+        {/* 🔹 Sign Up Button (Login screen ke button jaisa) */}
         <TouchableOpacity style={styles.button} onPress={handleSignUp}>
           <Text style={styles.buttonText}>Sign Up</Text>
         </TouchableOpacity>
-      </Animatable.View>
-
-      <Animatable.View animation="fadeIn" delay={1100} style={styles.signupContainer}>
-        <Text style={styles.signupText}>Already have an account? </Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-          <Text style={styles.signupButtonText}>Login</Text>
-        </TouchableOpacity>
-      </Animatable.View>
-      
+        
+        <View style={styles.loginContainer}>
+          <Text style={styles.loginText}>Already have an account? </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+            <Text style={styles.loginButtonText}>Login</Text>
+          </TouchableOpacity>
+        </View>
+        
+      </LinearGradient>
     </SafeAreaView>
   );
 }
 
-// --- Styles (Same) ---
+// --- NAYE CREATIVE STYLES ---
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#000428', // Gradient ka starting color
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#ffffff',
+  },
+  // Naya Back Button Style
+  backButton: {
+    position: 'absolute',
+    top: 50, // Adjust karein agar status bar ki height alag hai
+    left: 20,
+    zIndex: 10,
+    padding: 5, // Taaki touch area bada ho
+  },
+  logo: {
+    marginBottom: 10,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#FFFFFF',
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#E0E0E0',
     marginBottom: 30,
   },
   inputContainer: {
-    width: '100%',
-    marginBottom: 15,
-  },
-  input: {
+    flexDirection: 'row',
+    alignItems: 'center',
     width: '100%',
     height: 50,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)', // Translucent input
     borderRadius: 10,
+    marginBottom: 15,
     paddingHorizontal: 15,
-    fontSize: 16,
-    color: '#000',
-    borderWidth: 1,
-    borderColor: '#ddd',
   },
-  buttonContainer: {
-    width: '100%',
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    height: '100%',
+    fontSize: 16,
+    color: '#FFFFFF',
   },
   button: {
-    backgroundColor: '#007AFF',
+    width: '100%',
     paddingVertical: 15,
     borderRadius: 30,
     alignItems: 'center',
-    elevation: 8,
-    marginBottom: 10,
+    justifyContent: 'center',
+    marginTop: 10,
+    backgroundColor: '#FFFFFF', // Login screen jaisa primary button
   },
   buttonText: {
-    color: '#ffffff',
+    color: '#004e92', // Gradient ka dark color
     fontSize: 18,
     fontWeight: 'bold',
   },
-  signupContainer: {
+  loginContainer: {
     flexDirection: 'row',
-    marginTop: 10,
+    marginTop: 20,
   },
-  signupText: {
+  loginText: {
     fontSize: 16,
-    color: '#555',
+    color: '#ccc',
   },
-  signupButtonText: {
+  loginButtonText: {
     fontSize: 16,
-    color: '#007AFF',
+    color: '#FFFFFF',
     fontWeight: 'bold',
-  },
+  }
 });
