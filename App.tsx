@@ -1,10 +1,18 @@
-// App.tsx
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ActivityIndicator, View, StyleSheet, Text, StatusBar } from 'react-native';
+import {
+  ActivityIndicator,
+  View,
+  StyleSheet,
+  Text,
+  StatusBar,
+  SafeAreaView,
+  Platform,
+  Alert,
+} from 'react-native';
 
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
@@ -16,7 +24,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import HomeScreen from './screens/HomeScreen';
 import InfoScreen from './screens/InfoScreen';
 import LoginScreen from './screens/LoginScreen';
-import SignUpScreen from './screens/Signup'; // Using your file name 'Signup'
+import SignUpScreen from './screens/Signup';
 import AddDeviceScreen from './screens/AddDeviceScreen';
 import WeightGraphScreen from './screens/WeightGraphScreen';
 import BookingScreen from './screens/BookingScreen';
@@ -26,85 +34,84 @@ const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // ===================
-// 1️⃣ Bottom Tab Navigation
+// 1️⃣ Bottom Tab Navigation (CLEANED)
 // ===================
 function BottomTabs() {
   return (
-    <Tab.Navigator
-      initialRouteName="Home"
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#FFFFFF',
-        tabBarInactiveTintColor: '#88a1b9',
-        tabBarStyle: {
-          backgroundColor: '#000428',
-          borderTopWidth: 0,
-          height: 60,
-          paddingBottom: 5,
-          paddingTop: 5,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-        },
-      }}
-    >
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{
-          tabBarLabel: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="home-variant" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Analytics"
-        component={WeightGraphScreen}
-        options={{
-          tabBarLabel: 'Usage',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="chart-bar" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Booking"
-        component={BookingScreen}
-        options={{
-          tabBarLabel: 'Book',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="gas-cylinder" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{
-          tabBarLabel: 'Settings',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="cog" color={color} size={size} />
-          ),
-        }}
-      />
-
-      {/* 🔧 Hidden AddDevice screen */}
-      <Tab.Screen
-        name="AddDevice"
-        component={AddDeviceScreen}
-        options={{
-          tabBarButton: () => null,
-          tabBarStyle: { display: 'none' },
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#010A18' }}>
+      <Tab.Navigator
+        initialRouteName="Home"
+        screenOptions={{
           headerShown: false,
+          tabBarShowLabel: true,
+          tabBarActiveTintColor: '#FFFFFF',
+          tabBarInactiveTintColor: '#9ab3c9',
+          tabBarStyle: {
+            backgroundColor: '#010A18',
+            borderTopWidth: 0,
+            height: Platform.OS === 'ios' ? 90 : 65,
+            paddingBottom: Platform.OS === 'ios' ? 30 : 8,
+            paddingTop: 6,
+            elevation: 0,
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            marginBottom: 2,
+          },
         }}
-      />
-    </Tab.Navigator>
+      >
+        <Tab.Screen
+          name="Home"
+          component={HomeScreen}
+          options={{
+            tabBarLabel: 'Home',
+            tabBarIcon: ({ color }) => (
+              <MaterialCommunityIcons name="home-variant" color={color} size={26} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Analytics"
+          component={WeightGraphScreen}
+          options={{
+            tabBarLabel: 'Usage',
+            tabBarIcon: ({ color }) => (
+              <MaterialCommunityIcons name="chart-bar" color={color} size={26} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Booking"
+          component={BookingScreen}
+          options={{
+            tabBarLabel: 'Book',
+            tabBarIcon: ({ color }) => (
+              <MaterialCommunityIcons name="gas-cylinder" color={color} size={26} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{
+            tabBarLabel: 'Settings',
+            tabBarIcon: ({ color }) => (
+              <MaterialCommunityIcons name="cog" color={color} size={26} />
+            ),
+          }}
+        />
+        {/* 🟢 REMOVED the hidden 'AddDevice' tab from here. 
+            It's already correctly defined in AppStack.
+        */}
+      </Tab.Navigator>
+    </SafeAreaView>
   );
 }
 
+
+
 // ===================
-// 2️⃣ Auth Stack (Login / Onboarding)
+// 2️⃣ Auth Stack
 // ===================
 function AuthStack({ hasViewedInfo }: { hasViewedInfo: boolean }) {
   return (
@@ -117,7 +124,30 @@ function AuthStack({ hasViewedInfo }: { hasViewedInfo: boolean }) {
 }
 
 // ===================
-// 4️⃣ Notification Helper Function
+// 3️⃣ App Stack (This is correct)
+// ===================
+function AppStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen
+        name="Tabs"
+        component={BottomTabs}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AddDevice"
+        component={AddDeviceScreen}
+        options={{
+          headerShown: false,
+          presentation: 'card', 
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+// ===================
+// 4️⃣ Notification Helper
 // ===================
 async function requestUserPermissionAndSaveToken(userId: string) {
   try {
@@ -127,27 +157,35 @@ async function requestUserPermissionAndSaveToken(userId: string) {
       authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
     if (enabled) {
-      console.log('🔔 Notification permission granted.');
-      const fcmToken = await messaging().getToken();
-
-      if (fcmToken) {
-        console.log('User FCM Token:', fcmToken);
-        await firestore().collection('users').doc(userId).set({
-          fcmToken: fcmToken,
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
-        console.log('✅ FCM Token saved to Firestore.');
+      // 1. Initial Token Fetch and Save
+      const initialToken = await messaging().getToken();
+      if (initialToken) {
+        await firestore().collection('users').doc(userId).set(
+          { fcmToken: initialToken, updatedAt: firestore.FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+        console.log('✅ Initial FCM Token saved.');
       }
-    } else {
-      console.warn('Notification permission denied.');
-    }
+      
+      // 2. Persistent Listener for Token Refresh
+      const unsubscribeRefresh = messaging().onTokenRefresh(async (refreshedToken) => {
+        await firestore().collection('users').doc(userId).set(
+          { fcmToken: refreshedToken, updatedAt: firestore.FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+        console.log('🔄 FCM Token refreshed and saved successfully!');
+      });
+      
+      return unsubscribeRefresh; // Cleanup function return karein
+    } 
   } catch (error) {
-    console.error("❌ Error in requestUserPermissionAndSaveToken: ", error);
+    console.error('❌ Error in requestUserPermissionAndSaveToken:', error);
   }
+  return () => {}; // Agar permission nahi mili, toh empty cleanup function return karein
 }
 
 // ===================
-// 5️⃣ Main App Component
+// 5️⃣ Main App
 // ===================
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -155,21 +193,30 @@ function App() {
   const [hasViewedInfo, setHasViewedInfo] = useState(false);
 
   useEffect(() => {
-    console.log('🟡 App started → Checking login state...');
+    let tokenRefreshCleanup: (() => void) | undefined;
+    
+    // Foreground listener
+    const foregroundListener = messaging().onMessage(async remoteMessage => {
+      Alert.alert(
+        remoteMessage.notification?.title || 'New Alert',
+        remoteMessage.notification?.body || 'Check your device!'
+      );
+    });
 
     const authSubscriber = auth().onAuthStateChanged(async (userState) => {
-      console.log('👤 Firebase Auth Changed:', userState ? 'LOGGED IN ✅' : 'LOGGED OUT ❌');
       setUser(userState);
-
       try {
         if (userState) {
-          // User is logged in
-          requestUserPermissionAndSaveToken(userState.uid).catch(err => console.log(err));
+          // Jab user login karega, tab listener start hoga
+          tokenRefreshCleanup = await requestUserPermissionAndSaveToken(userState.uid);
         } else {
-          // User is logged out
+          // Logout par, purana listener band kar de
+          if (tokenRefreshCleanup) {
+             tokenRefreshCleanup();
+             tokenRefreshCleanup = undefined;
+          }
           const viewed = await AsyncStorage.getItem('hasViewedInfo');
           setHasViewedInfo(!!viewed);
-          console.log('📘 Onboarding Viewed?', !!viewed);
         }
       } catch (err) {
         console.log('❌ Error checking auth/onboarding:', err);
@@ -178,10 +225,15 @@ function App() {
       }
     });
 
-    return authSubscriber; // Cleanup
+    return () => {
+      authSubscriber();
+      foregroundListener();
+      if (tokenRefreshCleanup) {
+        tokenRefreshCleanup(); // Final cleanup
+      }
+    };
   }, []);
 
-  // 🌀 Loading UI
   if (isLoading) {
     return (
       <LinearGradient colors={['#000428', '#004e92']} style={styles.loadingContainer}>
@@ -192,18 +244,13 @@ function App() {
     );
   }
 
-  // 🧭 Main Navigation
   return (
     <NavigationContainer>
-      <StatusBar barStyle="dark-content" />
-      {user ? <BottomTabs /> : <AuthStack hasViewedInfo={hasViewedInfo} />}
+      {user ? <AppStack /> : <AuthStack hasViewedInfo={hasViewedInfo} />}
     </NavigationContainer>
   );
 }
 
-// ===================
-// Styles
-// ===================
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
@@ -214,7 +261,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
     fontSize: 16,
     color: '#ccc',
-  }
+  },
 });
 
 export default App;

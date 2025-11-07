@@ -13,24 +13,29 @@ import {
 import LinearGradient from 'react-native-linear-gradient'; // 🎨 Naya import
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // 🎨 Naya import
 
+// screens/BookingScreen.tsx (Sirf updated part)
+
+// ... (saare imports waise hi rahenge)
+
 const GAS_COMPANIES = [
   {
     name: 'Indane Gas',
-    missedCall: '7718955555',
-    website: 'https://portal.indianoil.in/sbw/Mobile/LPG/',
+    missedCall: '8454955555', //  UPDATED (ye naya all-India number hai)
+    website: 'https://cx.indianoil.in/', // UPDATED (ye naya "IndianOil One" portal hai)
   },
   {
     name: 'Bharat Gas',
-    missedCall: '7715012345',
-    website: 'https://my.ebharatgas.com/',
+    missedCall: '7710192345', // UPDATED (aapka 77150... tha)
+    website: 'https://my.ebharatgas.com/', // Ye sahi tha
   },
   {
     name: 'HP Gas',
-    missedCall: '9493602222',
-    website: 'https://myhpgas.in/myHPGas/Login.aspx',
+    missedCall: '9493602222', // Ye sahi tha
+    website: 'https://myhpgas.in/myHPGas/Login.aspx', // Ye bhi sahi tha
   },
 ];
 
+// ... (baaki poora component code waise ka waisa rahega)
 export default function BookingScreen() {
   const [selected, setSelected] = useState<string | null>(null);
 

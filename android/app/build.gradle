@@ -57,7 +57,8 @@ react {
 /**
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
-def enableProguardInReleaseBuilds = false
+// <-- MODIFIED: This is a crucial change!
+def enableProguardInReleaseBuilds = true
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -102,7 +103,23 @@ android {
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
+            // <-- MODIFIED: This removes unused resources (images, fonts, etc.)
+            shrinkResources true 
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+    }
+
+    // <-- MODIFIED: This is the BIGGEST size saver.
+    // This block splits your APK into smaller files, one for each CPU architecture.
+    // Most phones today use 'arm64-v8a'. Emulators use 'x86_64'.
+    splits {
+        abi {
+            enable true // Enable splitting
+            reset() // Do not include any ABIs by default
+            // Include only the most common architectures
+            // 'armeabi-v7a' (older 32-bit phones) and 'arm64-v8a' (modern 64-bit phones)
+            include "armeabi-v7a", "arm64-v8a"
+            universalApk false // Don't build one giant "universal" APK
         }
     }
 }

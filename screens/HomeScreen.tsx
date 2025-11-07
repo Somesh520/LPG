@@ -1,3 +1,7 @@
+// ===========================================
+// ======== AAPKA UPDATED HomeScreen.tsx ========
+// ===========================================
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -9,21 +13,22 @@ import {
   Alert,
   TouchableOpacity,
   Linking,
-  Dimensions
+  Dimensions,
+  StatusBar
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LineChart } from 'react-native-chart-kit';
-import LinearGradient from 'react-native-linear-gradient'; // 🎨 NEW IMPORT
-import { Svg, Circle } from 'react-native-svg'; // ⭕ NEW IMPORT
+import LinearGradient from 'react-native-linear-gradient';
+import { Svg, Circle } from 'react-native-svg';
 
-// ---------- CONSTANTS (NAYE) ----------
-const LOW_GAS_THRESHOLD_KG = 2.0; // Thoda badha diya
+// ---------- CONSTANTS ----------
+const LOW_GAS_THRESHOLD_KG = 2.0;
 const GAS_PROVIDER_URL = 'https://portal.indianoil.in/sbw/Mobile/LPG/';
 const ONLINE_THRESHOLD_SECONDS = 30;
-const MAX_WEIGHT = 14.2; // Standard cylinder weight (aap badal sakte hain)
+const MAX_WEIGHT = 14.2;
 const GAUGE_SIZE = 220;
 const STROKE_WIDTH = 22;
 const GAUGE_RADIUS = (GAUGE_SIZE - STROKE_WIDTH) / 2;
@@ -35,46 +40,81 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
   const [loading, setLoading] = useState(true);
   const [device, setDevice] = useState<any>(null);
   const [gasHistory, setGasHistory] = useState<number[]>([]);
+  const [weightHistory, setWeightHistory] = useState<number[]>([]); // ⭐️ YEH ADD HUA HAI
   const [now, setNow] = useState(new Date());
   const user = auth().currentUser;
 
   // ---------- Booking ----------
   const handleBookCylinder = () => {
-    Linking.openURL(GAS_PROVIDER_URL).catch(() => {
-      Alert.alert('Error', 'Could not open LPG booking website.');
-    });
+    navigation.navigate('Booking'); 
   };
 
   // ---------- Add Device ----------
   const handleAddDevice = () => {
+    navigation.navigate('AddDevice');
+  };
+
+  // ---------- Servo Command ----------
+  const sendServoCommand = async (command: 'OPEN' | 'CLOSED') => {
+    if (!device || !device.id) {
+      Alert.alert('Error', 'Device not found. Cannot send command.');
+      return;
+    }
+    
+    console.log(`Sending command: ${command} to device: ${device.id}`);
     try {
-      navigation.navigate('AddDevice');
-    } catch {
-      navigation.getParent()?.navigate('AddDevice');
+      await firestore().collection('devices').doc(device.id).update({
+        servoCommand: command,
+      });
+      Alert.alert('Success', `Regulator ${command} command sent!`);
+    } catch (err: any) {
+      console.error("Command Error:", err);
+      Alert.alert('Error', 'Failed to send command.');
     }
   };
 
-  // ---------- Load Stored Graph Data on Start ----------
+  // ---------- Load Stored Graph Data on Start (Updated) ----------
   useEffect(() => {
     const loadStoredHistory = async () => {
       try {
+        // 1. Gas History
         const stored = await AsyncStorage.getItem('gasHistory');
         if (stored) {
-          setGasHistory(JSON.parse(stored));
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setGasHistory(parsed);
+          } else {
+            setGasHistory([]);
+          }
+        } else {
+          setGasHistory([]);
         }
+
+        // 2. Weight History (⭐️ YEH ADD HUA HAI)
+        const storedWeight = await AsyncStorage.getItem('weightHistory');
+        if (storedWeight) {
+          const parsedWeight = JSON.parse(storedWeight);
+          if (Array.isArray(parsedWeight) && parsedWeight.length > 0) {
+            setWeightHistory(parsedWeight);
+          } else {
+            setWeightHistory([]);
+          }
+        } else {
+          setWeightHistory([]);
+        }
+
       } catch (err) {
-        console.log('⚠️ Error loading stored gas history:', err);
+        console.log('⚠️ Error loading stored history:', err);
       }
     };
     loadStoredHistory();
   }, []);
 
-  // ---------- Firestore Listener ----------
+  // ---------- Firestore Listener (Updated) ----------
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 5000);
 
     if (!user) {
-      navigation.replace('Login');
       clearInterval(timer);
       return;
     }
@@ -90,24 +130,46 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
 
             const lastUpdated = data?.lastUpdated?.toDate?.() ?? null;
             const gasValue = parseFloat(data?.gasLevel ?? 0);
+            const weightValue = parseFloat(data?.weight ?? 0); // ⭐️ YEH ADD HUA HAI
 
             setDevice({
               id: doc.id,
               name: data?.name || 'Unnamed Device',
               ownerName: data?.ownerName || user.displayName || 'User',
               gasLevel: gasValue,
-              weight: parseFloat(data?.weight ?? 0),
+              weight: weightValue, // Use variable
               unit: data?.unit || 'kg',
               lastUpdated,
+              servoStatus: data?.servoCommand || 'OPEN',
+              alert: data?.alert || false,
             });
 
-            // --- Update Graph & Save to Storage ---
+            // --- Update Gas Graph (Existing) ---
             setGasHistory(prev => {
-              const updated = [...prev, gasValue];
-              const limited = updated.length > 10 ? updated.slice(updated.length - 10) : updated;
-              AsyncStorage.setItem('gasHistory', JSON.stringify(limited)); // 💾 Save locally
-              return limited;
+              if (gasValue > 0) {
+                const updated = [...prev, gasValue];
+                const limited = updated.length > 10 ? updated.slice(updated.length - 10) : updated;
+                AsyncStorage.setItem('gasHistory', JSON.stringify(limited));
+                return limited;
+              }
+              return prev;
             });
+
+            // --- Update Weight Graph (⭐️ YEH ADD HUA HAI) ---
+            setWeightHistory(prev => {
+              if (weightValue > 0) {
+                // Only add if value changed (optional, good for storage)
+                if (prev.length === 0 || prev[prev.length - 1] !== weightValue) {
+                  const updated = [...prev, weightValue];
+                  const limited = updated.length > 10 ? updated.slice(updated.length - 10) : updated;
+                  // Save to local storage for the graph screen
+                  AsyncStorage.setItem('weightHistory', JSON.stringify(limited));
+                  return limited;
+                }
+              }
+              return prev; // Return old state if 0 or same
+            });
+
           } else {
             setDevice(null);
           }
@@ -124,37 +186,40 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
       unsubscribe();
       clearInterval(timer);
     };
-  }, [user, navigation]);
+  }, [user]);
 
-  // --- Status Calculation (Logic same) ---
+  // --- Status Calculation ---
   const isOnline = device?.lastUpdated
     ? (now.getTime() - device.lastUpdated.getTime()) / 1000 < ONLINE_THRESHOLD_SECONDS
     : false;
   const isLowGas = device?.weight <= LOW_GAS_THRESHOLD_KG && device?.weight > 0;
-  const isLeak = device?.gasLevel >= 75;
+  const isLeak = device?.alert === true; // Using alert field
 
-  // --- NAYA: Gauge Progress Calculation ---
+  // --- Gauge Progress Calculation ---
   const weightPercentage = Math.min(Math.max(device?.weight / MAX_WEIGHT, 0), 1);
   const strokeDashoffset = GAUGE_CIRCUMFERENCE * (1 - weightPercentage);
   const gaugeColor = isLowGas ? '#FFA000' : (weightPercentage > 0.5 ? '#4CAF50' : '#007AFF');
 
-  // ---------- UI (SAB NAYA DESIGN) ----------
+  // ---------- UI (No changes needed) ----------
+  // ... (Baaki saara UI code neeche same rahega) ...
 
-  // 🎨 1. Loading Screen (Dark Mode)
+  // 🎨 1. Loading Screen
   if (loading) {
     return (
       <LinearGradient colors={['#000428', '#004e92']} style={styles.center}>
+        <StatusBar barStyle="light-content" />
         <ActivityIndicator size="large" color="#FFFFFF" />
         <Text style={{ marginTop: 10, color: '#ccc' }}>Loading dashboard...</Text>
       </LinearGradient>
     );
   }
 
-  // 🎨 2. No Device Screen (Dark Mode)
+  // 🎨 2. No Device Screen
   if (!device) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
         <LinearGradient colors={['#000428', '#004e92']} style={styles.center}>
+          <StatusBar barStyle="light-content" />
           <Icon name="gas-cylinder-outline" size={70} color="#FFFFFF" />
           <Text style={styles.empty}>No device linked yet</Text>
           <Text style={styles.emptySubtitle}>Let's add your Smart Guardian</Text>
@@ -167,9 +232,10 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
     );
   }
 
-  // 🎨 3. Main Dashboard (Dark Mode)
+  // 🎨 3. Main Dashboard
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#000428', '#004e92']} style={StyleSheet.absoluteFillObject} />
       <ScrollView contentContainerStyle={styles.scroll}>
         
@@ -183,7 +249,7 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
         </View>
         <Text style={styles.ownerText}>👤 {device.ownerName}</Text>
         
-        {/* ⭕ NAYA: SVG Weight Gauge ⭕ */}
+        {/* SVG Weight Gauge */}
         <View style={styles.gaugeContainer}>
           <Svg width={GAUGE_SIZE} height={GAUGE_SIZE} viewBox={`0 0 ${GAUGE_SIZE} ${GAUGE_SIZE}`}>
             <Circle
@@ -214,7 +280,7 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
           </View>
         </View>
 
-        {/* ⚠️ Alerts (High Priority) */}
+        {/* Alerts */}
         {isLeak && (
           <View style={[styles.alertBox, styles.leakCard]}>
             <Icon name="fire-alert" size={24} color="#B71C1C" />
@@ -238,7 +304,38 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
           </View>
         )}
         
-        {/* Secondary Cards (Gas Level & Status) */}
+        {/* Servo Controls */}
+        <View style={styles.controlGroup}>
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              styles.controlButtonOn,
+              device.servoStatus === 'OPEN' && !isLeak && styles.controlButtonActive
+            ]}
+            onPress={() => sendServoCommand('OPEN')}
+            disabled={isLeak}
+          >
+            <Icon name="valve-open" size={20} color={device.servoStatus === 'OPEN' && !isLeak ? '#000428' : '#fff'} />
+            <Text style={[styles.controlButtonText, device.servoStatus === 'OPEN' && !isLeak && styles.controlButtonActiveText]}>
+              Manual ON
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              styles.controlButtonOff,
+              (device.servoStatus === 'CLOSED' || isLeak) && styles.controlButtonActive
+            ]}
+            onPress={() => sendServoCommand('CLOSED')}
+          >
+            <Icon name="valve-closed" size={20} color={(device.servoStatus === 'CLOSED' || isLeak) ? '#000428' : '#fff'} />
+            <Text style={[styles.controlButtonText, (device.servoStatus === 'CLOSED' || isLeak) && styles.controlButtonActiveText]}>
+              Manual OFF
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Secondary Cards */}
         <View style={styles.cardsRow}>
           <View style={[styles.card, isLeak && styles.leakCard]}>
             <Icon name="fire" size={30} color={isLeak ? '#E53935' : '#009688'} />
@@ -257,34 +354,42 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
           </View>
         </View>
 
-        {/* 📊 Gas Level Graph (Dark Mode) */}
+        {/* Gas Level Graph */}
         <View style={styles.graphContainer}>
           <Text style={styles.graphTitle}>Gas Sensor Trend (PPM)</Text>
           {gasHistory.length > 1 ? (
             <LineChart
               data={{
-                labels: Array.from({ length: gasHistory.length }, (_, i) => `${i + 1}`),
+                labels: [],
                 datasets: [{ data: gasHistory, strokeWidth: 3 }],
               }}
               width={screenWidth}
               height={220}
+              withShadow={true}
+              withHorizontalLines={false}
+              withVerticalLines={false}
               chartConfig={{
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
                 backgroundGradientFrom: 'rgba(255, 255, 255, 0.05)',
                 backgroundGradientTo: 'rgba(255, 255, 255, 0.05)',
-                color: (opacity = 1) => `rgba(0, 150, 136, ${opacity})`, // Teal color
+                decimalPlaces: 0,
+                color: (opacity = 1) => `rgba(0, 150, 136, ${opacity})`,
                 labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity * 0.5})`,
                 propsForDots: { r: '4', strokeWidth: '2', stroke: '#009688' },
-                propsForBackgroundLines: { stroke: 'rgba(255, 255, 255, 0.1)' }
+                propsForBackgroundLines: { stroke: 'transparent' }
               }}
               bezier
-              style={{ borderRadius: 16 }}
+              style={{ borderRadius: 16, paddingRight: 0 }}
             />
           ) : (
-            <Text style={{ color: '#888', marginTop: 10, height: 220, textAlignVertical: 'center' }}>
-              Waiting for gas sensor data...
-            </Text> 
-            // ^^^ YEH WALA FIX THA (</ReadText> ki jagah </Text>) ^^^
+            <View style={styles.emptyGraph}>
+              <Icon name="chart-line-variant" size={40} color="#888" />
+              <Text style={styles.emptyGraphText}>
+                Waiting for gas sensor data...
+              </Text>
+              <Text style={styles.emptyGraphSubText}>
+                Data will appear here as the sensor warms up and sends readings.
+              </Text>
+            </View> 
           )}
         </View>
 
@@ -300,7 +405,7 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
   );
 }
 
-// ---------- NAYE STYLES (DARK MODE) ----------
+// ---------- STYLES (Aapke original styles) ----------
 const styles = StyleSheet.create({
   // Containers
   container: { flex: 1, backgroundColor: '#000428' },
@@ -313,7 +418,7 @@ const styles = StyleSheet.create({
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF', // Primary button style
+    backgroundColor: '#FFFFFF', 
     paddingVertical: 12,
     paddingHorizontal: 25,
     borderRadius: 30,
@@ -352,8 +457,33 @@ const styles = StyleSheet.create({
   cardValue: { fontSize: 22, fontWeight: 'bold', marginTop: 4, color: '#FFFFFF' },
 
   // Graph
-  graphContainer: { marginTop: 10, borderRadius: 16, padding: 10, width: '100%', alignItems: 'center' },
+  graphContainer: {
+    marginTop: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 15,
+    width: '100%',
+    alignItems: 'center',
+  },
   graphTitle: { fontSize: 18, fontWeight: '600', color: '#FFFFFF', marginBottom: 15, alignSelf: 'flex-start' },
+  emptyGraph: { 
+    height: 220, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    paddingHorizontal: 20,
+  },
+  emptyGraphText: { 
+    color: '#aaa', 
+    marginTop: 10, 
+    fontSize: 16,
+    fontWeight: '600'
+  },
+  emptyGraphSubText: {
+    color: '#888',
+    marginTop: 5,
+    fontSize: 14,
+    textAlign: 'center',
+  },
 
   // Alerts
   alertBox: {
@@ -370,13 +500,56 @@ const styles = StyleSheet.create({
   alertText: { fontSize: 14, lineHeight: 20 },
   warningCard: { backgroundColor: '#FFF8E1', borderColor: '#FFA000' },
   leakCard: { backgroundColor: '#FFEBEE', borderColor: '#E53935' },
-
+  
+  // Servo Controls
+  controlGroup: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingHorizontal: 10, 
+  },
+  controlButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 30,
+    width: '48%',
+    height: 50,
+    borderWidth: 2,
+  },
+  controlButtonOn: {
+    backgroundColor: 'rgba(76, 175, 80, 0.3)',
+    borderColor: '#4CAF50',
+  },
+  controlButtonOff: {
+    backgroundColor: 'rgba(229, 57, 53, 0.3)',
+    borderColor: '#E53935',
+  },
+  controlButtonActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderColor: '#FFFFFF',
+    shadowColor: '#fff',
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  controlButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  controlButtonActiveText: {
+    color: '#000428',
+  },
+  
   // Footer Button
   bookBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF', // Primary button
+    backgroundColor: '#FFFFFF',
     paddingVertical: 15,
     borderRadius: 30,
     marginTop: 25,

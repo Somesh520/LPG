@@ -155,7 +155,8 @@ export default function AddDeviceScreen({ navigation }: { navigation: any }) {
       Alert.alert('✅ Success!', 'Device added successfully. It will now restart and connect to your home Wi-Fi.');
 
       // Home screen par waapas bhejo
-      navigation.navigate('Home'); // 'AppTabs' ke andar 'Home' par jaao
+     // Home screen par waapas bhejo
+navigation.navigate('Tabs', { screen: 'Home' }); // Pehle 'AppTabs' par jaao, phir 'Home' screen par // 'AppTabs' ke andar 'Home' par jaao
 
     } catch (err: any) {
       console.error('❌ Provisioning Error:', err.message || err);
@@ -305,9 +306,10 @@ export default function AddDeviceScreen({ navigation }: { navigation: any }) {
   );
 
   const getUserName = () => {
-    const user = auth().currentUser;
-    return user ? user.email || 'User' : 'Friend';
-  };
+  const user = auth().currentUser;
+  // Pehle displayName try karo, fir email, fir 'User'
+  return user ? (user.displayName || user.email || 'User') : 'Friend';
+};
 
   return (
     <SafeAreaView style={styles.safeArea}>

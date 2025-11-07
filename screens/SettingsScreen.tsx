@@ -1,5 +1,5 @@
 // screens/SettingsScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,142 +8,139 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  ScrollView, // 🎨 Naya import
+  ScrollView,
   StatusBar,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
-import axios from 'axios';
-import LinearGradient from 'react-native-linear-gradient'; // 🎨 Naya import
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // 🎨 Naya import
+import LinearGradient from 'react-native-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-// ⚠️⚠️⚠️ BOHOT ZAROORI WARNING ⚠️⚠️⚠️
-// Apna server key app mein store karna ek BADA SECURITY RISK hai.
-// Koi bhi aapki app ko decompile karke yeh key chura sakta hai aur aapke sabhi users ko faltu notifications bhej sakta hai.
-// Sahi tareeka: Ek Cloud Function banayein jo app se request le aur *server par* yeh key istemaal karke notification bhej
-const FCM_SERVER_KEY =
-  'YOUR_SERVER_KEY_HERE';
-// ------------------------------------------
+// ⭐️⭐️⭐️ YEH RAHA FIX ⭐️⭐️⭐️
+// 1. Purana (WEB) import HATA DEIN:
+// import { getFunctions, httpsCallable } from 'firebase/functions';
+
+// 2. Naya (NATIVE) import ADD KAREIN:
+import functions from '@react-native-firebase/functions';
+// ⭐️⭐️⭐️ FIX KHATAM ⭐️⭐️⭐️
+
 
 export default function SettingsScreen({ navigation }: { navigation: any }) {
   const user = auth().currentUser;
   const userName = user ? user.email : 'Guest';
   
-  // 🎨 Sirf ek loading state rakhein
-  const [isLoading, setIsLoading] = useState(false); 
+  const [isTestLoading, setIsTestLoading] = useState(false); 
+  const [isDeleteLoading, setIsDeleteLoading] = useState(false);
 
-  // 🔹 Logout
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [isDeviceLoading, setIsDeviceLoading] = useState(true);
+
+  // Device ID fetch (Delete button ke liye)
+  useEffect(() => {
+    const fetchDeviceId = async () => {
+      if (!user) {
+        setIsDeviceLoading(false);
+        return;
+      }
+      try {
+        const snapshot = await firestore()
+          .collection('devices')
+          .where('ownerId', '==', user.uid)
+          .limit(1)
+          .get();
+
+        if (!snapshot.empty) {
+          setDeviceId(snapshot.docs[0].id);
+        }
+      } catch (e) {
+        console.error("Error fetching device ID:", e);
+      } finally {
+        setIsDeviceLoading(false);
+      }
+    };
+    
+    fetchDeviceId();
+  }, [user]);
+
+  // Logout
   const handleLogout = () => {
     Alert.alert('Logout', 'Kya aap sach mein logout karna chahte hain?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Logout', 
         onPress: () => {
           auth().signOut();
-          // Login screen par le jaayein (App.tsx state change se handle kar lega)
         } 
       },
     ]);
   };
 
-  // 🔹 Delete Device (FIXED LOGIC)
+  // Delete Device
   const handleDeleteDevice = async () => {
-    if (!user) return Alert.alert('Error', 'Please login first.');
+    if (!user || !deviceId) {
+      Alert.alert('Error', 'Device not found.');
+      return;
+    }
 
-    Alert.alert('Delete Device', 'Kya aap apna device permanently delete karna chahte hain? Yeh action reverse nahi ho sakta.', [
+    Alert.alert('Delete Device', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Yes, Delete',
         style: 'destructive',
         onPress: async () => {
-          setIsLoading(true);
+          setIsDeleteLoading(true); // Delete loading state
           try {
-            const snapshot = await firestore()
-              .collection('devices')
-              .where('ownerId', '==', user.uid)
-              .get();
-
-            if (snapshot.empty) {
-              return Alert.alert('Info', 'Koi device linked nahi hai.');
-            }
-
-            const deviceDoc = snapshot.docs[0];
-            const deviceId = deviceDoc.id;
-            console.log('Deleting device:', deviceId);
-
-            // --- LOGIC FIX ---
-            // Woh 192.168.4.1 wala fetch hata diya hai kyunki woh 99% fail hoga.
-            // Factory reset cloud se trigger hona chahiye (e.g., Firestore mein ek 'command' field set karke).
-            console.log('Device factory reset signal cloud (MQTT/Firestore) se bhejna chahiye.');
-
-            // Firestore se device delete karein
             await firestore().collection('devices').doc(deviceId).delete();
-
             Alert.alert('Success', 'Device deleted successfully.');
-            // 'AddDevice' par bhejne ki zaroorat nahi, 'Home' screen ab empty state dikhayegi.
+            setDeviceId(null); // Device state update
           } catch (error: any) {
             console.error('Delete error:', error.message);
             Alert.alert('Error', 'Device delete karte waqt error aaya.');
           } finally {
-            setIsLoading(false);
+            setIsDeleteLoading(false);
           }
         },
       },
     ]);
   };
 
-  // 🔔 Manual FCM Notification Test (FIXED)
+  // ⭐️⭐️ YEH HAI NAYI LOGIC (NATIVE SDK ke saath) ⭐️⭐️
   const handleSendTestNotification = async () => {
-    if (isLoading) return;
-
-    // --- SECURITY CHECK ---
-    if (FCM_SERVER_KEY === 'YOUR_SERVER_KEY_HERE') {
-      Alert.alert(
-        'Warning',
-        'Please add your FCM Server Key in the SettingsScreen.tsx file first.'
-      );
-      return;
-    }
-
-    if (!user) return Alert.alert('Error', 'Please login first.');
+    if (isTestLoading) return;
+    setIsTestLoading(true); // Test loading state
     
-    setIsLoading(true);
     try {
-      const userDoc = await firestore().collection('users').doc(user.uid).get();
-      const fcmToken = userDoc.data()?.fcmToken;
+      // 1. @react-native-firebase/functions ka istemaal karein
+      // Isse getFunctions() ki zaroorat nahi hai
+      const sendTestNotification = functions().httpsCallable('sendTestNotification');
+      
+      console.log('Calling cloud function "sendTestNotification"...');
+      
+      // 3. Function ko call karo
+      const result: any = await sendTestNotification();
+      
+      console.log('Cloud function response:', result.data);
 
-      if (!fcmToken) {
-        return Alert.alert(
-          'Error',
-          'No FCM token found. Try logging out and back in.'
-        );
+      if (result.data.success) {
+        Alert.alert('✅ Success', 'Test notification sent successfully! Check your phone.');
+      } else {
+        throw new Error(result.data.error || 'Cloud function returned an error.');
       }
 
-      const notificationPayload = {
-        to: fcmToken,
-        notification: {
-          title: '🔥 Smart Guardian Test',
-          body: 'This is a test notification from your app!',
-          sound: 'default',
-        },
-      };
-
-      await axios.post('https://fcm.googleapis.com/fcm/send', notificationPayload, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `key=${FCM_SERVER_KEY}`,
-        },
-      });
-
-      Alert.alert('✅ Success', 'Test notification sent successfully!');
     } catch (err: any) {
       console.error('Notification error:', err.message);
-      Alert.alert('Error', 'Failed to send notification. Check your server key.');
+      if(err.message.includes("not-found")) {
+        Alert.alert('Error', 'Function not found. Please deploy your "sendTestNotification" cloud function.');
+      } else {
+        Alert.alert('Error', `Failed to send notification: ${err.message}`);
+      }
     } finally {
-      setIsLoading(false);
+      setIsTestLoading(false);
     }
   };
 
-  // --- 🎨 NAYA CREATIVE UI ---
+  // Koi bhi action chal raha ho toh buttons disable karein
+  const isActionLoading = isTestLoading || isDeleteLoading;
+
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -162,13 +159,13 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
             <Text style={styles.profileLabel}>Logged In User</Text>
           </View>
         </View>
-
+        
         {/* General Settings */}
         <Text style={styles.sectionTitle}>General</Text>
         <View style={styles.settingsGroup}>
           <TouchableOpacity
             style={styles.settingItem}
-            disabled={isLoading}
+            disabled={isActionLoading}
             onPress={() => Alert.alert('Coming Soon', 'Yeh feature jald hi aa raha hai.')}
           >
             <Icon name="wifi-cog" size={24} color="#007AFF" style={styles.settingIcon} />
@@ -177,7 +174,7 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.settingItem}
-            disabled={isLoading}
+            disabled={isActionLoading}
             onPress={() => Alert.alert('Coming Soon', 'Yeh feature jald hi aa raha hai.')}
           >
             <Icon name="account-edit" size={24} color="#4CAF50" style={styles.settingIcon} />
@@ -185,15 +182,15 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
             <Icon name="chevron-right" size={22} color="#777" />
           </TouchableOpacity>
         </View>
-        
+
         {/* Developer Settings */}
         <Text style={styles.sectionTitle}>Developer</Text>
         <TouchableOpacity
           style={styles.testButton}
-          disabled={isLoading}
+          disabled={isActionLoading}
           onPress={handleSendTestNotification}
         >
-          {isLoading ? (
+          {isTestLoading ? ( // Sirf test loading check
             <ActivityIndicator color="#fff" />
           ) : (
             <>
@@ -207,10 +204,11 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
         <Text style={styles.sectionTitle}>Danger Zone</Text>
         <TouchableOpacity
           style={styles.deleteButton}
-          disabled={isLoading}
+          // ⭐️ FIX: Delete button ki sahi disabled logic
+          disabled={isActionLoading || isDeviceLoading || !deviceId} 
           onPress={handleDeleteDevice}
         >
-          {isLoading ? (
+          {isDeleteLoading ? ( // Sirf delete loading check
             <ActivityIndicator color="#fff" />
           ) : (
             <>
@@ -223,7 +221,7 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
         {/* Logout Button */}
         <TouchableOpacity
           style={styles.logoutButton}
-          disabled={isLoading}
+          disabled={isActionLoading}
           onPress={handleLogout}
         >
           <Icon name="logout" size={20} color="#fff" />
@@ -234,7 +232,7 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
   );
 }
 
-// ---------- NAYE CREATIVE STYLES ----------
+// ---------- STYLES ----------
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -280,13 +278,12 @@ const styles = StyleSheet.create({
   settingsGroup: {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 15,
-    overflow: 'hidden', // Taaki items ke corner bhi round hon
+    overflow: 'hidden',
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 18,
-    // Neeche waali item ke liye border
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
@@ -296,10 +293,8 @@ const styles = StyleSheet.create({
   settingText: {
     color: '#fff',
     fontSize: 16,
-    flex: 1, // Taaki text poori jagah le
+    flex: 1,
   },
-  
-  // Action Buttons
   testButton: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -308,7 +303,7 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 30,
     marginTop: 10,
-    height: 50, // Fix height taaki loading mein jump na ho
+    height: 50,
   },
   deleteButton: {
     flexDirection: 'row',
