@@ -20,20 +20,21 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // 🎨 Nay
 const GAS_COMPANIES = [
   {
     name: 'Indane Gas',
-    missedCall: '8454955555', //  UPDATED (ye naya all-India number hai)
-    website: 'https://cx.indianoil.in/', // UPDATED (ye naya "IndianOil One" portal hai)
+    missedCall: '8454955555',
+    website: 'https://cx.indianoil.in',
   },
   {
     name: 'Bharat Gas',
-    missedCall: '7710192345', // UPDATED (aapka 77150... tha)
-    website: 'https://my.ebharatgas.com/', // Ye sahi tha
+    missedCall: '7710192345',
+    website: 'https://my.ebharatgas.com',
   },
   {
     name: 'HP Gas',
-    missedCall: '9493602222', // Ye sahi tha
-    website: 'https://myhpgas.in/myHPGas/Login.aspx', // Ye bhi sahi tha
+    missedCall: '9493602222',
+    website: 'https://www.hindustanpetroleum.com/hp-gas',
   },
 ];
+
 
 // ... (baaki poora component code waise ka waisa rahega)
 export default function BookingScreen() {

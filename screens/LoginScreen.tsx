@@ -7,100 +7,149 @@ import {
   SafeAreaView, 
   TouchableOpacity, 
   TextInput, 
-  Alert,
   StatusBar,
-  ActivityIndicator // --- NAYA IMPORT ---
+  ActivityIndicator
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-
 import LinearGradient from 'react-native-linear-gradient';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; 
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Modal from 'react-native-modal';
 
 export default function LoginScreen({ navigation }: { navigation: any }) {
-  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // --- NAYI LOADING STATES ---
   const [isEmailLoading, setIsEmailLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  // Helper variable taaki koi bhi button disable kar sakein
   const isLoading = isEmailLoading || isGoogleLoading;
 
-  // Google Sign-In ko configure karo
+  // --- MODAL STATES ---
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState<'success' | 'error'>('success');
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+
+  // Show popup helper
+  const showPopup = (
+    type: 'success' | 'error',
+    title: string,
+    message: string
+  ) => {
+    setModalType(type);
+    setModalTitle(title);
+    setModalMessage(message);
+    setModalVisible(true);
+  };
+
+  // Google Sign-In configuration
   useEffect(() => {
     GoogleSignin.configure({
       webClientId: '328780906303-pa0qqqkh1b9b3bnnaj2h7tg88u8overg.apps.googleusercontent.com',
     });
   }, []);
 
-  // --- Email/Password Login Function (Updated) ---
+  // --- EMAIL LOGIN ---
   const handleLogin = async () => {
-    if (isLoading) return; // Agar pehle se loading hai, toh kuch mat karo
-    if (email.length === 0 || password.length === 0) {
-      Alert.alert('Error', 'Please enter email and password.');
+    if (isLoading) return;
+
+    if (!email || !password) {
+      showPopup('error', 'Missing Fields', 'Please enter email and password.');
       return;
     }
-    
-    setIsEmailLoading(true); // --- NAYA ---
+
+    setIsEmailLoading(true);
     try {
       await auth().signInWithEmailAndPassword(email, password);
-      // Success par App.tsx navigation sambhaal lega
-      // Component unmount ho jaayega, state reset ki zaroorat nahi.
+      
+      // ✅ Show success popup immediately
+      showPopup('success', 'Login Successful', 'Welcome back! Redirecting...');
+      
+      // ✅ Wait for popup to be visible, then navigate
+      setTimeout(() => {
+        setModalVisible(false);
+        // Use a slight delay to ensure modal closes smoothly
+        setTimeout(() => {
+          navigation.replace('Tabs', { screen: 'Home' });
+        }, 300);
+      }, 1800);
+      
     } catch (error: any) {
-      console.log(error);
-      if (error.code === 'auth/wrong-password' || 
-          error.code === 'auth/user-not-found' ||
-          error.code === 'auth/invalid-email') {
-        Alert.alert('Error', 'Invalid email or password.');
+      console.log('Email Login Error:', error);
+      if (
+        error.code === 'auth/wrong-password' ||
+        error.code === 'auth/user-not-found' ||
+        error.code === 'auth/invalid-email' ||
+        error.code === 'auth/invalid-credential'
+      ) {
+        showPopup('error', 'Login Failed', 'Invalid email or password.');
       } else {
-        Alert.alert('Error', 'An error occurred. Please try again.');
+        showPopup('error', 'Error', 'Something went wrong. Please try again.');
       }
-      setIsEmailLoading(false); // --- NAYA: Sirf error par reset karo
+    } finally {
+      setIsEmailLoading(false);
     }
   };
 
-  // --- Google Sign-In Function (Updated) ---
+  // --- GOOGLE LOGIN ---
   const handleGoogleSignIn = async () => {
-    if (isLoading) return; // --- NAYA ---
+    if (isLoading) return;
+    setIsGoogleLoading(true);
 
-    setIsGoogleLoading(true); // --- NAYA ---
     try {
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      const userInfo: any = await GoogleSignin.signIn();  
-      if (!userInfo || !userInfo.data || !userInfo.data.idToken) {  
-        throw new Error('Google Sign-In failed: No ID Token found.');
+      const response = await GoogleSignin.signIn();
+      const idToken = response?.data?.idToken;
+
+      if (!idToken) {
+        throw new Error('No ID Token found. Please try again.');
       }
-      const googleCredential = auth.GoogleAuthProvider.credential(userInfo.data.idToken);
+
+      // ✅ IMPORTANT: Show popup BEFORE Firebase auth
+      // This prevents component unmount from hiding the popup
+      console.log('✅ Showing popup BEFORE Firebase auth...');
+      showPopup('success', 'Login Successful', 'Logged in with Google!');
+      
+      // Small delay to ensure popup renders
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
       await auth().signInWithCredential(googleCredential);
-      Alert.alert('Success', 'Logged in with Google!');
-      // App.tsx navigation sambhaal lega
+      
+      console.log('✅ Google Login Firebase success');
+
+      // ✅ Wait for popup to show, then navigate
+      setTimeout(() => {
+        setModalVisible(false);
+        setTimeout(() => {
+          navigation.replace('Tabs', { screen: 'Home' });
+        }, 300);
+      }, 2000); // Increased to 2 seconds
+      
     } catch (error: any) {
       console.log('Google Sign-In Error:', error);
       if (error.code === 'SIGN_IN_CANCELLED') {
-        Alert.alert('Cancelled', 'Google Sign-In was cancelled.');
+        showPopup('error', 'Cancelled', 'You cancelled Google Sign-In.');
+      } else if (error.code === 'IN_PROGRESS') {
+        showPopup('error', 'In Progress', 'Sign-in already in progress.');
       } else {
-        Alert.alert('Error', error.message || 'Google Sign-In failed. Please try again.');
+        showPopup('error', 'Error', error.message || 'Google Sign-In failed.');
       }
-      setIsGoogleLoading(false); // --- NAYA: Sirf error par reset karo
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
-  // --- NAYA CREATIVE UI (Updated) ---
   return (
     <SafeAreaView style={styles.safeArea}>
-      <LinearGradient 
-        colors={['#000428', '#004e92']} 
-        style={styles.container}
-      >
+      <LinearGradient colors={['#000428', '#004e92']} style={styles.container}>
         <StatusBar barStyle="light-content" />
-        
-        <Icon name="gas-cylinder" size={80} color="#FFFFFF" style={styles.logo} />
 
+        <Icon name="gas-cylinder" size={80} color="#FFFFFF" style={styles.logo} />
         <Text style={styles.title}>Welcome Back!</Text>
         <Text style={styles.subtitle}>Sign in to your account</Text>
-        
+
+        {/* --- EMAIL INPUT --- */}
         <View style={styles.inputContainer}>
           <Icon name="email-outline" size={20} color="#ccc" style={styles.inputIcon} />
           <TextInput
@@ -111,10 +160,11 @@ export default function LoginScreen({ navigation }: { navigation: any }) {
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
-            editable={!isLoading} // --- NAYA: Loading mein disable
+            editable={!isLoading}
           />
         </View>
-        
+
+        {/* --- PASSWORD INPUT --- */}
         <View style={styles.inputContainer}>
           <Icon name="lock-outline" size={20} color="#ccc" style={styles.inputIcon} />
           <TextInput
@@ -124,16 +174,12 @@ export default function LoginScreen({ navigation }: { navigation: any }) {
             secureTextEntry
             value={password}
             onChangeText={setPassword}
-            editable={!isLoading} // --- NAYA: Loading mein disable
+            editable={!isLoading}
           />
         </View>
 
-        {/* --- NAYA: Updated Login Button --- */}
-        <TouchableOpacity 
-          style={styles.button} 
-          onPress={handleLogin}
-          disabled={isLoading} // Loading mein disable
-        >
+        {/* --- LOGIN BUTTON --- */}
+        <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={isLoading}>
           {isEmailLoading ? (
             <ActivityIndicator size="small" color="#004e92" />
           ) : (
@@ -142,12 +188,12 @@ export default function LoginScreen({ navigation }: { navigation: any }) {
         </TouchableOpacity>
 
         <Text style={styles.separatorText}>OR</Text>
-        
-        {/* --- NAYA: Updated Google Button --- */}
-        <TouchableOpacity 
-          style={[styles.button, styles.googleButton]} 
+
+        {/* --- GOOGLE BUTTON --- */}
+        <TouchableOpacity
+          style={[styles.button, styles.googleButton]}
           onPress={handleGoogleSignIn}
-          disabled={isLoading} // Loading mein disable
+          disabled={isLoading}
         >
           {isGoogleLoading ? (
             <ActivityIndicator size="small" color="#DB4437" />
@@ -158,48 +204,61 @@ export default function LoginScreen({ navigation }: { navigation: any }) {
             </>
           )}
         </TouchableOpacity>
-        
+
         <View style={styles.signupContainer}>
           <Text style={styles.signupText}>Don't have an account? </Text>
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('SignUp')}
-            disabled={isLoading} // Loading mein disable
-          >
+          <TouchableOpacity onPress={() => navigation.navigate('SignUp')} disabled={isLoading}>
             <Text style={styles.signupButtonText}>Sign Up</Text>
           </TouchableOpacity>
         </View>
-        
       </LinearGradient>
+
+      {/* --- POPUP MODAL --- */}
+      <Modal
+        isVisible={isModalVisible}
+        onBackdropPress={() => {
+          // Prevent closing on backdrop press during success
+          if (modalType === 'error') {
+            setModalVisible(false);
+          }
+        }}
+        animationIn="zoomIn"
+        animationOut="zoomOut"
+        backdropOpacity={0.7}
+        useNativeDriver={true}
+        hideModalContentWhileAnimating={true}
+      >
+        <View style={styles.modalContent}>
+          <Icon
+            name={modalType === 'success' ? 'check-circle' : 'alert-circle'}
+            size={60}
+            color={modalType === 'success' ? '#4CAF50' : '#E53935'}
+            style={{ marginBottom: 10 }}
+          />
+          <Text style={styles.modalTitle}>{modalTitle}</Text>
+          <Text style={styles.modalMessage}>{modalMessage}</Text>
+          
+          {/* Only show OK button for errors */}
+          {modalType === 'error' && (
+            <TouchableOpacity
+              style={[styles.modalButton, { backgroundColor: '#E53935' }]}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-// --- Styles (Same) ---
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#000428', 
-  },
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  logo: {
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#E0E0E0',
-    marginBottom: 30,
-  },
+  safeArea: { flex: 1, backgroundColor: '#000428' },
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  logo: { marginBottom: 20 },
+  title: { fontSize: 32, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 10 },
+  subtitle: { fontSize: 16, color: '#E0E0E0', marginBottom: 30 },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -210,58 +269,50 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     paddingHorizontal: 15,
   },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    height: '100%',
-    fontSize: 16,
-    color: '#FFFFFF',
-  },
+  inputIcon: { marginRight: 10 },
+  input: { flex: 1, height: '100%', fontSize: 16, color: '#FFFFFF' },
   button: {
     width: '100%',
-    height: 50, // --- Height fix kar di taaki spinner aane par jump na kare
-    paddingVertical: 15,
+    height: 50,
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     marginTop: 10,
-    backgroundColor: '#FFFFFF', 
+    backgroundColor: '#FFFFFF',
   },
-  buttonText: {
-    color: '#004e92', 
-    fontSize: 18,
+  buttonText: { color: '#004e92', fontSize: 18, fontWeight: 'bold' },
+  separatorText: { marginVertical: 20, color: '#ccc', fontWeight: 'bold' },
+  googleButton: { backgroundColor: 'transparent', borderWidth: 2, borderColor: '#DB4437' },
+  googleButtonText: { color: '#DB4437', fontSize: 17, fontWeight: 'bold', marginLeft: 10 },
+  signupContainer: { flexDirection: 'row', marginTop: 20 },
+  signupText: { fontSize: 16, color: '#ccc' },
+  signupButtonText: { fontSize: 16, color: '#FFFFFF', fontWeight: 'bold' },
+  modalContent: {
+    backgroundColor: '#1B2444',
+    padding: 25,
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 22,
     fontWeight: 'bold',
-  },
-  separatorText: {
-    marginVertical: 20,
-    color: '#ccc',
-    fontWeight: 'bold',
-  },
-  googleButton: {
-    backgroundColor: 'transparent', 
-    borderWidth: 2,
-    borderColor: '#DB4437', 
-  },
-  googleButtonText: {
-    color: '#DB4437',
-    fontSize: 17,
-    fontWeight: 'bold',
-    marginLeft: 10,
-  },
-  signupContainer: {
-    flexDirection: 'row',
-    marginTop: 20,
-  },
-  signupText: {
-    fontSize: 16,
-    color: '#ccc',
-  },
-  signupButtonText: {
-    fontSize: 16,
     color: '#FFFFFF',
-    fontWeight: 'bold',
-  }
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#ccc',
+    textAlign: 'center',
+    marginBottom: 25,
+  },
+  modalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    borderRadius: 30,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
 });

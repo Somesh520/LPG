@@ -1,0 +1,39 @@
+[debug] [2025-11-13T15:58:56.333Z] ----------------------------------------------------------------------
+[debug] [2025-11-13T15:58:56.334Z] Command:       /opt/homebrew/Cellar/node/24.10.0/bin/node /opt/homebrew/bin/firebase deploy --only functions
+[debug] [2025-11-13T15:58:56.335Z] CLI Version:   14.23.0
+[debug] [2025-11-13T15:58:56.335Z] Platform:      darwin
+[debug] [2025-11-13T15:58:56.335Z] Node Version:  v24.10.0
+[debug] [2025-11-13T15:58:56.335Z] Time:          Thu Nov 13 2025 21:28:56 GMT+0530 (India Standard Time)
+[debug] [2025-11-13T15:58:56.335Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-11-13T15:58:56.336Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2025-11-13T15:58:56.447Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-11-13T15:58:56.447Z] > authorizing via signed-in user (someshtiwari.in@gmail.com)
+[debug] [2025-11-13T15:58:56.447Z] [iam] checking project lpgguard for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2025-11-13T15:58:56.447Z] Checked if tokens are valid: false, expires at: 1762975836629
+[debug] [2025-11-13T15:58:56.447Z] Checked if tokens are valid: false, expires at: 1762975836629
+[debug] [2025-11-13T15:58:56.448Z] > refreshing access token with scopes: []
+[debug] [2025-11-13T15:58:56.448Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2025-11-13T15:58:56.448Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-11-13T15:58:56.655Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2025-11-13T15:58:56.655Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-11-13T15:58:56.664Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/lpgguard:testIamPermissions [none]
+[debug] [2025-11-13T15:58:56.664Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/lpgguard:testIamPermissions x-goog-quota-user=projects/lpgguard
+[debug] [2025-11-13T15:58:56.664Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/lpgguard:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2025-11-13T15:58:57.109Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2025-11-13T15:58:57.109Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2025-11-13T15:58:57.163Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/lpgguard:testIamPermissions 200
+[debug] [2025-11-13T15:58:57.163Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/lpgguard:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2025-11-13T15:58:57.163Z] Checked if tokens are valid: true, expires at: 1763053135655
+[debug] [2025-11-13T15:58:57.163Z] Checked if tokens are valid: true, expires at: 1763053135655
+[debug] [2025-11-13T15:58:57.163Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/lpgguard/serviceAccounts/lpgguard@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2025-11-13T15:58:57.163Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/lpgguard/serviceAccounts/lpgguard@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[debug] [2025-11-13T15:58:59.119Z] <<< [apiv2][status] POST https://iam.googleapis.com/v1/projects/lpgguard/serviceAccounts/lpgguard@appspot.gserviceaccount.com:testIamPermissions 200
+[debug] [2025-11-13T15:58:59.119Z] <<< [apiv2][body] POST https://iam.googleapis.com/v1/projects/lpgguard/serviceAccounts/lpgguard@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[info] 
+[info] === Deploying to 'lpgguard'...
+[info] 
+[info] i  deploying functions 
+[debug] [2025-11-13T15:58:59.124Z] Checked if tokens are valid: true, expires at: 1763053135655
+[debug] [2025-11-13T15:58:59.124Z] Checked if tokens are valid: true, expires at: 1763053135655
+[debug] [2025-11-13T15:58:59.125Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/lpgguard [none]

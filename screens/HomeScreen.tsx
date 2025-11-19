@@ -1,6 +1,4 @@
-// ===========================================
-// ======== AAPKA UPDATED HomeScreen.tsx ========
-// ===========================================
+
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -10,9 +8,8 @@ import {
   ActivityIndicator,
   StyleSheet,
   ScrollView,
-  Alert,
+  // Alert,
   TouchableOpacity,
-  Linking,
   Dimensions,
   StatusBar
 } from 'react-native';
@@ -22,42 +19,80 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LineChart } from 'react-native-chart-kit';
 import LinearGradient from 'react-native-linear-gradient';
-import { Svg, Circle } from 'react-native-svg';
 
-// ---------- CONSTANTS ----------
-const LOW_GAS_THRESHOLD_KG = 2.0;
-const GAS_PROVIDER_URL = 'https://portal.indianoil.in/sbw/Mobile/LPG/';
+// ... (Saare imports same hain)
+import * as Animatable from 'react-native-animatable';
+import Modal from 'react-native-modal'; 
+import functions from '@react-native-firebase/functions';
+
+// ... (Saare constants same hain)
+const LOW_GAS_THRESHOLD_KG = 2.0; 
 const ONLINE_THRESHOLD_SECONDS = 30;
-const MAX_WEIGHT = 14.2;
-const GAUGE_SIZE = 220;
-const STROKE_WIDTH = 22;
-const GAUGE_RADIUS = (GAUGE_SIZE - STROKE_WIDTH) / 2;
-const GAUGE_CIRCUMFERENCE = GAUGE_RADIUS * 2 * Math.PI;
-
+const MAX_GAS_CAPACITY_KG = 14.2; 
 const screenWidth = Dimensions.get('window').width - 40;
 
+// ... (getCylinderStatusInfo function same hai)
+const getCylinderStatusInfo = (gasPercentage: number, isLow: boolean, isLeak: boolean) => {
+  
+  if (isLeak) {
+    return {
+      icon: 'fire-alert', 
+      color: '#B71C1C', 
+    };
+  }
+  
+  const level = Math.max(0, Math.min(100, Math.round(gasPercentage * 100)));
+
+  if (level >= 80) {
+    return { icon: 'gas-cylinder', color: '#4CAF50' }; // Full/Green
+  }
+  if (level >= 50) {
+    return { icon: 'gas-cylinder', color: '#007AFF' }; // Blue (Medium)
+  }
+  if (level > 0) {
+    if (isLow) {
+      return { icon: 'gas-cylinder', color: '#FFA000' }; // Orange (Low)
+    }
+    return { icon: 'gas-cylinder', color: '#007AFF' }; // Blue
+  }
+  
+  return { icon: 'gas-cylinder-outline', color: '#aaa' }; // Grey (Empty Outline)
+};
+
+
 export default function HomeScreen({ navigation }: { navigation: any }) {
+  // ... (Saare hooks aur functions same hain)
   const [loading, setLoading] = useState(true);
   const [device, setDevice] = useState<any>(null);
   const [gasHistory, setGasHistory] = useState<number[]>([]);
-  const [weightHistory, setWeightHistory] = useState<number[]>([]); // ⭐️ YEH ADD HUA HAI
+  const [weightHistory, setWeightHistory] = useState<number[]>([]);
   const [now, setNow] = useState(new Date());
   const user = auth().currentUser;
 
-  // ---------- Booking ----------
-  const handleBookCylinder = () => {
-    navigation.navigate('Booking'); 
-  };
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState<'success' | 'error'>('success');
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
 
-  // ---------- Add Device ----------
-  const handleAddDevice = () => {
-    navigation.navigate('AddDevice');
-  };
+  const [isPredicting, setIsPredicting] = useState(false);
 
-  // ---------- Servo Command ----------
+  const showCustomAlert = (
+    type: 'success' | 'error', 
+    title: string, 
+    message: string
+  ) => {
+    setModalType(type);
+    setModalTitle(title);
+    setModalMessage(message);
+    setModalVisible(true);
+  };
+  
+  const handleBookCylinder = () => navigation.navigate('Booking');
+  const handleAddDevice = () => navigation.navigate('AddDevice');
+
   const sendServoCommand = async (command: 'OPEN' | 'CLOSED') => {
     if (!device || !device.id) {
-      Alert.alert('Error', 'Device not found. Cannot send command.');
+      showCustomAlert( 'error', 'Device Not Found', 'Cannot send command right now.');
       return;
     }
     
@@ -66,42 +101,81 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
       await firestore().collection('devices').doc(device.id).update({
         servoCommand: command,
       });
-      Alert.alert('Success', `Regulator ${command} command sent!`);
+      showCustomAlert('success', 'Command Sent', `Regulator is now set to ${command}.`);
     } catch (err: any) {
       console.error("Command Error:", err);
-      Alert.alert('Error', 'Failed to send command.');
+      showCustomAlert('error', 'Command Failed', 'Please check your connection and try again.');
     }
   };
 
-  // ---------- Load Stored Graph Data on Start (Updated) ----------
+  const handlePrediction = async () => {
+    if (!device || !device.id) {
+        showCustomAlert('error', 'No Device', 'Please add a device first.');
+        return;
+    }
+    
+    if (!device.tareWeight) {
+        showCustomAlert(
+            'error', 
+            'Tare Weight Not Set', 
+            'Please go to Settings and set the "Empty (Tare) Weight" first.'
+        );
+        return;
+    }
+
+    setIsPredicting(true);
+
+    try {
+      const predict = functions().httpsCallable('predictDaysLeft');
+      const result: any = await predict({ deviceId: device.id });
+
+      if (result.data.daysLeft !== null && result.data.daysLeft !== undefined) {
+        const days = result.data.daysLeft;
+        const rate = result.data.avgConsumptionPerDay;
+        
+        showCustomAlert(
+            'success',
+            `Prediction: ${days} days left`,
+            `Based on your usage, you use approx ${rate} KG per day.`
+        );
+
+      } else {
+        showCustomAlert(
+            'error', 
+            'Cannot Predict Yet', 
+            result.data.error || 'Waiting for more usage data.'
+        );
+      }
+
+    } catch (err: any) {
+      console.error("Prediction Error:", err);
+      showCustomAlert(
+          'error', 
+          'Prediction Failed', 
+          err.message || 'Cloud Function error.'
+      );
+    } finally {
+      setIsPredicting(false);
+    }
+  };
+
+  // ... (useEffect functions sab same hain)
   useEffect(() => {
     const loadStoredHistory = async () => {
       try {
-        // 1. Gas History
         const stored = await AsyncStorage.getItem('gasHistory');
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setGasHistory(parsed);
-          } else {
-            setGasHistory([]);
-          }
-        } else {
-          setGasHistory([]);
-        }
+          if (Array.isArray(parsed) && parsed.length > 0) setGasHistory(parsed);
+          else setGasHistory([]);
+        } else setGasHistory([]);
 
-        // 2. Weight History (⭐️ YEH ADD HUA HAI)
         const storedWeight = await AsyncStorage.getItem('weightHistory');
         if (storedWeight) {
           const parsedWeight = JSON.parse(storedWeight);
-          if (Array.isArray(parsedWeight) && parsedWeight.length > 0) {
-            setWeightHistory(parsedWeight);
-          } else {
-            setWeightHistory([]);
-          }
-        } else {
-          setWeightHistory([]);
-        }
+          if (Array.isArray(parsedWeight) && parsedWeight.length > 0) setWeightHistory(parsedWeight);
+          else setWeightHistory([]);
+        } else setWeightHistory([]);
 
       } catch (err) {
         console.log('⚠️ Error loading stored history:', err);
@@ -110,7 +184,6 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
     loadStoredHistory();
   }, []);
 
-  // ---------- Firestore Listener (Updated) ----------
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 5000);
 
@@ -130,21 +203,22 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
 
             const lastUpdated = data?.lastUpdated?.toDate?.() ?? null;
             const gasValue = parseFloat(data?.gasLevel ?? 0);
-            const weightValue = parseFloat(data?.weight ?? 0); // ⭐️ YEH ADD HUA HAI
+            const weightValue = parseFloat(data?.weight ?? 0); 
 
             setDevice({
               id: doc.id,
               name: data?.name || 'Unnamed Device',
               ownerName: data?.ownerName || user.displayName || 'User',
               gasLevel: gasValue,
-              weight: weightValue, // Use variable
+              weight: weightValue,
               unit: data?.unit || 'kg',
               lastUpdated,
               servoStatus: data?.servoCommand || 'OPEN',
               alert: data?.alert || false,
+              tareWeight: data?.tareWeight || null, 
+              lowGasThreshold: data?.lowGasThreshold || null,
             });
 
-            // --- Update Gas Graph (Existing) ---
             setGasHistory(prev => {
               if (gasValue > 0) {
                 const updated = [...prev, gasValue];
@@ -155,19 +229,16 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
               return prev;
             });
 
-            // --- Update Weight Graph (⭐️ YEH ADD HUA HAI) ---
             setWeightHistory(prev => {
               if (weightValue > 0) {
-                // Only add if value changed (optional, good for storage)
                 if (prev.length === 0 || prev[prev.length - 1] !== weightValue) {
                   const updated = [...prev, weightValue];
                   const limited = updated.length > 10 ? updated.slice(updated.length - 10) : updated;
-                  // Save to local storage for the graph screen
-                  AsyncStorage.setItem('weightHistory', JSON.stringify(limited));
+                    AsyncStorage.setItem('weightHistory', JSON.stringify(limited));
                   return limited;
                 }
               }
-              return prev; // Return old state if 0 or same
+              return prev;
             });
 
           } else {
@@ -177,7 +248,11 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
         },
         err => {
           console.error('❌ Firestore error:', err);
-          Alert.alert('Error', 'Could not load device data.');
+          showCustomAlert(
+            'error',
+            'Connection Error',
+            'Could not load device data.'
+          );
           setLoading(false);
         },
       );
@@ -188,22 +263,18 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
     };
   }, [user]);
 
-  // --- Status Calculation ---
+  // ... (Status calculations sab same hain)
   const isOnline = device?.lastUpdated
     ? (now.getTime() - device.lastUpdated.getTime()) / 1000 < ONLINE_THRESHOLD_SECONDS
     : false;
-  const isLowGas = device?.weight <= LOW_GAS_THRESHOLD_KG && device?.weight > 0;
-  const isLeak = device?.alert === true; // Using alert field
+  const lowGasLimit = device?.lowGasThreshold || LOW_GAS_THRESHOLD_KG; 
+  const gasLeft = Math.max(0, (device?.weight || 0) - (device?.tareWeight || 0));
+  const isLowGas = gasLeft <= lowGasLimit && gasLeft > 0;
+  const isLeak = device?.alert === true;
+  const gasPercentage = MAX_GAS_CAPACITY_KG > 0 ? (gasLeft / MAX_GAS_CAPACITY_KG) : 0;
 
-  // --- Gauge Progress Calculation ---
-  const weightPercentage = Math.min(Math.max(device?.weight / MAX_WEIGHT, 0), 1);
-  const strokeDashoffset = GAUGE_CIRCUMFERENCE * (1 - weightPercentage);
-  const gaugeColor = isLowGas ? '#FFA000' : (weightPercentage > 0.5 ? '#4CAF50' : '#007AFF');
 
-  // ---------- UI (No changes needed) ----------
-  // ... (Baaki saara UI code neeche same rahega) ...
-
-  // 🎨 1. Loading Screen
+  // ... (Loading Screen same hai)
   if (loading) {
     return (
       <LinearGradient colors={['#000428', '#004e92']} style={styles.center}>
@@ -214,75 +285,104 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
     );
   }
 
-  // 🎨 2. No Device Screen
+  // ... (No Device Screen same hai)
   if (!device) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
         <LinearGradient colors={['#000428', '#004e92']} style={styles.center}>
           <StatusBar barStyle="light-content" />
-          <Icon name="gas-cylinder-outline" size={70} color="#FFFFFF" />
-          <Text style={styles.empty}>No device linked yet</Text>
-          <Text style={styles.emptySubtitle}>Let's add your Smart Guardian</Text>
-          <TouchableOpacity style={styles.addBtn} onPress={handleAddDevice}>
-            <Icon name="plus" size={20} color="#004e92" />
-            <Text style={styles.addBtnText}>Add New Device</Text>
-          </TouchableOpacity>
+          <Animatable.View animation="pulse" easing="ease-out" iterationCount="infinite">
+            <Icon name="gas-cylinder-outline" size={70} color="#FFFFFF" />
+          </Animatable.View>
+          <Animatable.Text style={styles.empty} animation="fadeInUp" delay={100}>
+            No device linked yet
+          </Animatable.Text>
+          <Animatable.Text style={styles.emptySubtitle} animation="fadeInUp" delay={200}>
+            Let's add your Smart Guardian
+          </Animatable.Text>
+          <Animatable.View animation="fadeInUp" delay={300}>
+            <TouchableOpacity style={styles.addBtn} onPress={handleAddDevice}>
+              <Icon name="plus" size={20} color="#004e92" />
+              <Text style={styles.addBtnText}>Add New Device</Text>
+            </TouchableOpacity>
+          </Animatable.View>
         </LinearGradient>
       </SafeAreaView>
     );
   }
 
-  // 🎨 3. Main Dashboard
+  // 🎨 3. Main Dashboard (Final Return)
   return (
     <SafeAreaView style={styles.container}>
+      {/* ... (Gradient, Header, Gauge, Prediction Button, Alerts... sab same hain) ... */}
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#000428', '#004e92']} style={StyleSheet.absoluteFillObject} />
+      
       <ScrollView contentContainerStyle={styles.scroll}>
         
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.deviceName}>{device.name}</Text>
-          <View style={[styles.statusBadge, isOnline ? styles.online : styles.offline]}>
-            <Icon name={isOnline ? 'wifi' : 'wifi-off'} size={16} color="#fff" />
-            <Text style={styles.statusText}>{isOnline ? 'Online' : 'Offline'}</Text>
+        <Animatable.View animation="fadeInDown" duration={600}>
+          <View style={styles.header}>
+            <Text style={styles.deviceName}>{device.name}</Text>
+            <Animatable.View 
+              animation={isOnline ? "pulse" : undefined} 
+              easing="ease-out" 
+              iterationCount="infinite"
+              style={[styles.statusBadge, isOnline ? styles.online : styles.offline]}
+            >
+              <Icon name={isOnline ? 'wifi' : 'wifi-off'} size={16} color="#fff" />
+              <Text style={styles.statusText}>{isOnline ? 'Online' : 'Offline'}</Text>
+            </Animatable.View>
           </View>
-        </View>
-        <Text style={styles.ownerText}>👤 {device.ownerName}</Text>
+          <Text style={styles.ownerText}>👤 {device.ownerName}</Text>
+        </Animatable.View>
         
-        {/* SVG Weight Gauge */}
-        <View style={styles.gaugeContainer}>
-          <Svg width={GAUGE_SIZE} height={GAUGE_SIZE} viewBox={`0 0 ${GAUGE_SIZE} ${GAUGE_SIZE}`}>
-            <Circle
-              cx={GAUGE_SIZE / 2}
-              cy={GAUGE_SIZE / 2}
-              r={GAUGE_RADIUS}
-              stroke="rgba(255, 255, 255, 0.1)"
-              strokeWidth={STROKE_WIDTH}
-              fill="transparent"
-            />
-            <Circle
-              cx={GAUGE_SIZE / 2}
-              cy={GAUGE_SIZE / 2}
-              r={GAUGE_RADIUS}
-              stroke={gaugeColor}
-              strokeWidth={STROKE_WIDTH}
-              fill="transparent"
-              strokeDasharray={GAUGE_CIRCUMFERENCE}
-              strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
-              transform={`rotate(-90 ${GAUGE_SIZE / 2} ${GAUGE_SIZE / 2})`}
-            />
-          </Svg>
-          <View style={styles.gaugeTextContainer}>
-            <Text style={styles.gaugeValue}>{device.weight ? `${device.weight.toFixed(2)}` : 'N/A'}</Text>
-            <Text style={styles.gaugeUnit}>{device.unit}</Text>
-            <Text style={styles.gaugeLabel}>Weight</Text>
-          </View>
-        </View>
+        {/* Dynamic Cylinder Gauge (Updated) */}
+        <Animatable.View animation="zoomIn" duration={800} delay={200} style={styles.batteryContainer}>
+           {(() => {
+            const cylinderInfo = getCylinderStatusInfo(gasPercentage, isLowGas, isLeak);
+            return (
+              <>
+                <Icon name={cylinderInfo.icon} size={100} color={cylinderInfo.color} />
+                <View style={styles.batteryTextContainer}>
+                  <Text style={[styles.batteryValue, { color: cylinderInfo.color }]}>
+                    {(gasPercentage * 100).toFixed(0)}%
+                  </Text>
+                  <Text style={styles.batteryLabel}>
+                    ({gasLeft.toFixed(2)} KG left)
+                  </Text>
+                </View>
+              </>
+            );
+          })()}
+        </Animatable.View>
+
+        {/* Prediction Button */}
+        <Animatable.View animation="fadeInUp" delay={300}>
+          <TouchableOpacity 
+            style={styles.predictButton} 
+            onPress={handlePrediction}
+            disabled={isPredicting}
+          >
+            {isPredicting ? (
+              <ActivityIndicator color="#004e92" />
+            ) : (
+              <>
+                <Icon name="brain" size={20} color="#004e92" />
+                <Text style={styles.predictButtonText}>Predict Days Left</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </Animatable.View>
 
         {/* Alerts */}
         {isLeak && (
-          <View style={[styles.alertBox, styles.leakCard]}>
+          <Animatable.View 
+            animation="shake"
+            iterationCount="infinite" 
+            duration={2000}
+            style={[styles.alertBox, styles.leakCard]}
+          >
             <Icon name="fire-alert" size={24} color="#B71C1C" />
             <View style={styles.alertTextBox}>
               <Text style={[styles.alertTitle, { color: '#B71C1C' }]}>GAS LEAK DETECTED!</Text>
@@ -290,129 +390,205 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                 Turn off main valve immediately and ventilate the area!
               </Text>
             </View>
-          </View>
+          </Animatable.View>
         )}
         {isLowGas && !isLeak && (
-          <View style={[styles.alertBox, styles.warningCard]}>
+          <Animatable.View 
+            animation="pulse"
+            easing="ease-out"
+            iterationCount="infinite"
+            style={[styles.alertBox, styles.warningCard]}
+          >
             <Icon name="alert-outline" size={24} color="#E65100" />
             <View style={styles.alertTextBox}>
               <Text style={[styles.alertTitle, { color: '#E65100' }]}>Low Gas Warning</Text>
               <Text style={[styles.alertText, { color: '#E65100' }]}>
-                Gas is below {LOW_GAS_THRESHOLD_KG} KG. Please book a new cylinder.
+                Gas is below {lowGasLimit} KG. Please book a new cylinder.
               </Text>
             </View>
-          </View>
+          </Animatable.View>
         )}
         
-        {/* Servo Controls */}
-        <View style={styles.controlGroup}>
-          <TouchableOpacity
-            style={[
-              styles.controlButton,
-              styles.controlButtonOn,
-              device.servoStatus === 'OPEN' && !isLeak && styles.controlButtonActive
-            ]}
-            onPress={() => sendServoCommand('OPEN')}
-            disabled={isLeak}
-          >
-            <Icon name="valve-open" size={20} color={device.servoStatus === 'OPEN' && !isLeak ? '#000428' : '#fff'} />
-            <Text style={[styles.controlButtonText, device.servoStatus === 'OPEN' && !isLeak && styles.controlButtonActiveText]}>
-              Manual ON
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.controlButton,
-              styles.controlButtonOff,
-              (device.servoStatus === 'CLOSED' || isLeak) && styles.controlButtonActive
-            ]}
-            onPress={() => sendServoCommand('CLOSED')}
-          >
-            <Icon name="valve-closed" size={20} color={(device.servoStatus === 'CLOSED' || isLeak) ? '#000428' : '#fff'} />
-            <Text style={[styles.controlButtonText, (device.servoStatus === 'CLOSED' || isLeak) && styles.controlButtonActiveText]}>
-              Manual OFF
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* ⭐️ YEH RAHA SAHI SERVO CONTROLS (JSX Update) ⭐️ */}
+        <Animatable.View 
+          animation="fadeInUp"
+          duration={600}
+          delay={400} 
+          style={styles.controlGroup}
+        >
+            {/* --- MANUAL ON BUTTON --- */}
+            <TouchableOpacity
+                style={[
+                styles.controlButton,
+                // Agar (OPEN hai AND leak nahi hai) TO active style, WARNA inactive style
+                (device.servoStatus === 'OPEN' && !isLeak) 
+                    ? styles.controlButtonOnActive 
+                    : styles.controlButtonOn
+                ]}
+                onPress={() => sendServoCommand('OPEN')}
+                disabled={isLeak} // Leak hone par ON button disable
+            >
+                <Icon name="valve-open" size={20} color={'#FFFFFF'} /> 
+                <Text style={styles.controlButtonText}>
+                Manual ON
+                </Text>
+            </TouchableOpacity>
 
+            {/* --- MANUAL OFF BUTTON --- */}
+            <TouchableOpacity
+                style={[
+                styles.controlButton,
+                // Agar (CLOSED hai YA leak hai) TO active style, WARNA inactive style
+                (device.servoStatus === 'CLOSED' || isLeak) 
+                    ? styles.controlButtonOffActive 
+                    : styles.controlButtonOff
+                ]}
+                onPress={() => sendServoCommand('CLOSED')}
+            >
+                <Icon name="valve-closed" size={20} color={'#FFFFFF'} />
+                <Text style={styles.controlButtonText}>
+                Manual OFF
+                </Text>
+            </TouchableOpacity>
+        </Animatable.View>
+
+        {/* ... (Cards, Graph, Button, Modal... sab same hain) ... */}
+        
         {/* Secondary Cards */}
-        <View style={styles.cardsRow}>
-          <View style={[styles.card, isLeak && styles.leakCard]}>
-            <Icon name="fire" size={30} color={isLeak ? '#E53935' : '#009688'} />
-            <Text style={styles.cardLabel}>Gas Level (Leak Sensor)</Text>
-            <Text style={[styles.cardValue, isLeak && { color: '#B71C1C' }]}>
-              {device.gasLevel ? `${device.gasLevel.toFixed(0)}%` : 'N/A'}
-            </Text>
-          </View>
-
-          <View style={styles.card}>
-            <Icon name="clock-outline" size={30} color="#007AFF" />
-            <Text style={styles.cardLabel}>Last Updated</Text>
-            <Text style={[styles.cardValue, { fontSize: 16 }]}>
-              {device.lastUpdated ? device.lastUpdated.toLocaleTimeString() : 'N/A'}
-            </Text>
-          </View>
-        </View>
+        <Animatable.View
+          animation="fadeInUp"
+          duration={600}
+          delay={500} 
+          style={styles.cardsRow}
+        >
+            <View style={[styles.card, isLeak && styles.leakCard]}>
+                <Icon name="fire" size={30} color={isLeak ? '#E53935' : '#009688'} />
+                <Text style={styles.cardLabel}>Gas Level (Leak Sensor)</Text>
+                <Text style={[styles.cardValue, isLeak && { color: '#B71C1C' }]}>
+                {device.gasLevel ? `${device.gasLevel.toFixed(0)}%` : 'N/A'}
+                </Text>
+            </View>
+            <View style={styles.card}>
+                <Icon name="clock-outline" size={30} color="#007AFF" />
+                <Text style={styles.cardLabel}>Last Updated</Text>
+                <Text style={[styles.cardValue, { fontSize: 16 }]}>
+                {device.lastUpdated ? device.lastUpdated.toLocaleTimeString() : 'N/A'}
+                </Text>
+            </View>
+        </Animatable.View>
 
         {/* Gas Level Graph */}
-        <View style={styles.graphContainer}>
-          <Text style={styles.graphTitle}>Gas Sensor Trend (PPM)</Text>
-          {gasHistory.length > 1 ? (
-            <LineChart
-              data={{
-                labels: [],
-                datasets: [{ data: gasHistory, strokeWidth: 3 }],
-              }}
-              width={screenWidth}
-              height={220}
-              withShadow={true}
-              withHorizontalLines={false}
-              withVerticalLines={false}
-              chartConfig={{
-                backgroundGradientFrom: 'rgba(255, 255, 255, 0.05)',
-                backgroundGradientTo: 'rgba(255, 255, 255, 0.05)',
-                decimalPlaces: 0,
-                color: (opacity = 1) => `rgba(0, 150, 136, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity * 0.5})`,
-                propsForDots: { r: '4', strokeWidth: '2', stroke: '#009688' },
-                propsForBackgroundLines: { stroke: 'transparent' }
-              }}
-              bezier
-              style={{ borderRadius: 16, paddingRight: 0 }}
-            />
-          ) : (
-            <View style={styles.emptyGraph}>
-              <Icon name="chart-line-variant" size={40} color="#888" />
-              <Text style={styles.emptyGraphText}>
-                Waiting for gas sensor data...
-              </Text>
-              <Text style={styles.emptyGraphSubText}>
-                Data will appear here as the sensor warms up and sends readings.
-              </Text>
-            </View> 
-          )}
-        </View>
+        <Animatable.View
+          animation="fadeInUp"
+          duration={600}
+          delay={600}
+          style={styles.graphContainer}
+        >
+            <Text style={styles.graphTitle}>Gas Sensor Trend (PPM)</Text>
+            {gasHistory.length > 1 ? (
+                <LineChart
+                data={{
+                    labels: [],
+                    datasets: [{ data: gasHistory, strokeWidth: 3 }],
+                }}
+                width={screenWidth}
+                height={220}
+                withShadow={true}
+                withHorizontalLines={false}
+                withVerticalLines={false}
+                chartConfig={{
+                    backgroundGradientFrom: 'rgba(255, 255, 255, 0.05)',
+                    backgroundGradientTo: 'rgba(255, 255, 255, 0.05)',
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(0, 150, 136, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity * 0.5})`,
+                    propsForDots: { r: '4', strokeWidth: '2', stroke: '#009688' },
+                    propsForBackgroundLines: { stroke: 'transparent' }
+                }}
+                bezier
+                style={{ borderRadius: 16, paddingRight: 0 }}
+                />
+            ) : (
+                <View style={styles.emptyGraph}>
+                <Icon name="chart-line-variant" size={40} color="#888" />
+                <Text style={styles.emptyGraphText}>
+                    Waiting for gas sensor data...
+                </Text>
+                <Text style={styles.emptyGraphSubText}>
+                    Data will appear here as the sensor warms up and sends readings.
+                </Text>
+                </View> 
+            )}
+        </Animatable.View>
 
         {/* Footer Button */}
         {isLowGas && (
-          <TouchableOpacity style={styles.bookBtn} onPress={handleBookCylinder}>
-            <Icon name="phone" size={20} color="#004e92" />
-            <Text style={styles.bookBtnText}>Book New Cylinder</Text>
-          </TouchableOpacity>
+          <Animatable.View
+            animation="fadeInUp"
+            duration={600}
+            delay={700}
+          >
+            <TouchableOpacity style={styles.bookBtn} onPress={handleBookCylinder}>
+              <Icon name="phone" size={20} color="#004e92" />
+              <Text style={styles.bookBtnText}>Book New Cylinder</Text>
+            </TouchableOpacity>
+          </Animatable.View>
         )}
       </ScrollView>
+
+      {/* Chatbot Button (FAB) */}
+      <Animatable.View 
+        animation="zoomIn"
+        delay={1000}
+        duration={500}
+        style={styles.chatButtonContainer}
+      >
+        <TouchableOpacity 
+          style={styles.chatButton} 
+          onPress={() => navigation.navigate('Chatbot')}
+        >
+          <Icon name="robot" size={26} color="#FFFFFF" />
+        </TouchableOpacity>
+      </Animatable.View>
+
+
+      {/* Custom Modal Pop-up */}
+      <Modal
+        isVisible={isModalVisible}
+        onBackdropPress={() => setModalVisible(false)}
+        onBackButtonPress={() => setModalVisible(false)}
+        animationIn="zoomIn"
+        animationOut="zoomOut"
+        backdropOpacity={0.7}
+      >
+        <View style={styles.modalContent}>
+          <Icon 
+            name={modalType === 'success' ? 'check-circle' : 'alert-circle'}
+            size={50}
+            color={modalType === 'success' ? '#4CAF50' : '#E53935'}
+            style={{ marginBottom: 15 }}
+          />
+          <Text style={styles.modalTitle}>{modalTitle}</Text>
+          <Text style={styles.modalMessage}>{modalMessage}</Text>
+          <TouchableOpacity 
+            style={styles.modalButton} 
+            onPress={() => setModalVisible(false)}
+          >
+            <Text style={styles.modalButtonText}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
 
-// ---------- STYLES (Aapke original styles) ----------
+// ---------- ⭐️ STYLES (Control Button styles update kiye gaye) ⭐️ ----------
 const styles = StyleSheet.create({
-  // Containers
+  // ... (container se lekar baaki sab same hain)
   container: { flex: 1, backgroundColor: '#000428' },
   scroll: { padding: 20, paddingBottom: 50 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  
-  // Empty State
   empty: { fontSize: 22, fontWeight: 'bold', color: '#FFFFFF', marginTop: 15 },
   emptySubtitle: { fontSize: 16, color: '#ccc', marginTop: 5 },
   addBtn: {
@@ -425,8 +601,6 @@ const styles = StyleSheet.create({
     marginTop: 25,
   },
   addBtnText: { color: '#004e92', fontSize: 16, fontWeight: 'bold', marginLeft: 8 },
-
-  // Header
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 5 },
   deviceName: { fontSize: 28, fontWeight: 'bold', color: '#FFFFFF' },
   ownerText: { fontSize: 16, color: '#aaa', marginBottom: 25, width: '100%' },
@@ -434,15 +608,49 @@ const styles = StyleSheet.create({
   online: { backgroundColor: '#4CAF50' },
   offline: { backgroundColor: '#E53935' },
   statusText: { color: '#fff', marginLeft: 5, fontWeight: '600', fontSize: 14 },
-
-  // Gauge
-  gaugeContainer: { width: GAUGE_SIZE, height: GAUGE_SIZE, alignItems: 'center', justifyContent: 'center', marginBottom: 30, alignSelf: 'center' },
-  gaugeTextContainer: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  gaugeValue: { fontSize: 48, fontWeight: '800', color: '#FFFFFF' },
-  gaugeUnit: { fontSize: 20, color: '#FFFFFF', fontWeight: '500', marginTop: -5 },
-  gaugeLabel: { fontSize: 16, color: '#aaa', marginTop: 5 },
-
-  // Cards
+  batteryContainer: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 30,
+    paddingVertical: 20,
+    flexDirection: 'row',
+  },
+  batteryTextContainer: {
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    marginLeft: 15,
+  },
+  batteryValue: {
+    fontSize: 52,
+    fontWeight: '800',
+    color: '#FFFFFF', 
+  },
+  batteryLabel: {
+    fontSize: 18,
+    color: '#aaa',
+    marginTop: 0,
+  },
+  predictButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF', 
+    paddingVertical: 15,
+    borderRadius: 30,
+    marginTop: 0,
+    marginBottom: 20, 
+    shadowColor: '#fff',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  predictButtonText: {
+    color: '#004e92',
+    fontSize: 17,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
   cardsRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 20 },
   card: {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
@@ -455,8 +663,6 @@ const styles = StyleSheet.create({
   },
   cardLabel: { fontSize: 15, color: '#aaa', marginTop: 8, textAlign: 'center' },
   cardValue: { fontSize: 22, fontWeight: 'bold', marginTop: 4, color: '#FFFFFF' },
-
-  // Graph
   graphContainer: {
     marginTop: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -484,8 +690,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-
-  // Alerts
   alertBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -501,7 +705,7 @@ const styles = StyleSheet.create({
   warningCard: { backgroundColor: '#FFF8E1', borderColor: '#FFA000' },
   leakCard: { backgroundColor: '#FFEBEE', borderColor: '#E53935' },
   
-  // Servo Controls
+  // ⭐️ YAHAN SE STYLES UPDATE HUE HAIN ⭐️
   controlGroup: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -516,35 +720,49 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     width: '48%',
     height: 50,
-    borderWidth: 2,
+    borderWidth: 2, // Outline ke liye
   },
+  // Inactive ON Button (Sirf outline)
   controlButtonOn: {
-    backgroundColor: 'rgba(76, 175, 80, 0.3)',
+    backgroundColor: 'transparent', // ⭐️ Change
     borderColor: '#4CAF50',
   },
+  // Inactive OFF Button (Sirf outline)
   controlButtonOff: {
-    backgroundColor: 'rgba(229, 57, 53, 0.3)',
+    backgroundColor: 'transparent', // ⭐️ Change
     borderColor: '#E53935',
   },
-  controlButtonActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderColor: '#FFFFFF',
-    shadowColor: '#fff',
+  // Active ON Button (Solid Green)
+  controlButtonOnActive: {
+    backgroundColor: '#4CAF50', // ⭐️ Naya
+    borderColor: '#4CAF50',
+    shadowColor: '#4CAF50',
     shadowOpacity: 0.8,
     shadowRadius: 10,
     elevation: 10,
   },
+  // Active OFF Button (Solid Red)
+  controlButtonOffActive: {
+    backgroundColor: '#E53935', // ⭐️ Naya
+    borderColor: '#E53935',
+    shadowColor: '#E53935',
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  // Text hamesha white
   controlButtonText: {
-    color: '#FFFFFF',
+    color: '#FFFFFF', // ⭐️ Hamesha white
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 10,
   },
-  controlButtonActiveText: {
-    color: '#000428',
-  },
+  // Yeh styles ab use nahi ho rahe (DELETE KAR DIYE)
+  // controlButtonActive: { ... }
+  // controlButtonActiveText: { ... }
   
-  // Footer Button
+  // ⭐️ YAHAN TAK STYLES UPDATE HUE HAIN ⭐️
+
   bookBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -555,4 +773,57 @@ const styles = StyleSheet.create({
     marginTop: 25,
   },
   bookBtnText: { color: '#004e92', fontSize: 17, fontWeight: 'bold', marginLeft: 10 },
+  chatButtonContainer: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+  },
+  chatButton: {
+    backgroundColor: '#007AFF', 
+    width: 60,
+    height: 60,
+    borderRadius: 30,      
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,          
+    shadowColor: '#000',   
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  modalContent: {
+    backgroundColor: '#1A233C',
+    padding: 25,
+    borderRadius: 20,
+    alignItems: 'center',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#ccc',
+    textAlign: 'center',
+    marginBottom: 25,
+    lineHeight: 22,
+  },
+  modalButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    borderRadius: 30,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
